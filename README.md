@@ -47,12 +47,12 @@ Install-CCProxyProfile
 
 ```bash
 cd ~/claude-code-cli-proxy
-wget -qO- "https://github.com/router-for-me/CLIProxyAPI/releases/latest/download/CLIProxyAPI_linux_amd64.tar.gz" \
+wget -qO- "https://github.com/router-for-me/CLIProxyAPI/releases/download/v6.8.26/CLIProxyAPI_6.8.26_linux_amd64.tar.gz" \
   | tar xz
 chmod +x cli-proxy-api
 ```
 
-> 정확한 릴리스 URL은 GitHub Releases 페이지에서 확인합니다.
+> 새 버전이 나오면 [GitHub Releases](https://github.com/router-for-me/CLIProxyAPI/releases) 페이지에서 최신 URL을 확인합니다.
 
 #### 2) 1회 로드
 

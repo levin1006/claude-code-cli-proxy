@@ -51,7 +51,7 @@ GitHub Releases에서 Linux 바이너리를 다운로드한다.
 **amd64 (x86_64)**:
 ```bash
 cd ~/claude-code-cli-proxy
-wget -qO- "https://github.com/router-for-me/CLIProxyAPI/releases/latest/download/CLIProxyAPI_linux_amd64.tar.gz" \
+wget -qO- "https://github.com/router-for-me/CLIProxyAPI/releases/download/v6.8.26/CLIProxyAPI_6.8.26_linux_amd64.tar.gz" \
   | tar xz
 chmod +x cli-proxy-api
 ```
@@ -59,12 +59,12 @@ chmod +x cli-proxy-api
 **arm64 (aarch64)**:
 ```bash
 cd ~/claude-code-cli-proxy
-wget -qO- "https://github.com/router-for-me/CLIProxyAPI/releases/latest/download/CLIProxyAPI_linux_arm64.tar.gz" \
+wget -qO- "https://github.com/router-for-me/CLIProxyAPI/releases/download/v6.8.26/CLIProxyAPI_6.8.26_linux_arm64.tar.gz" \
   | tar xz
 chmod +x cli-proxy-api
 ```
 
-> 정확한 릴리스 URL은 https://github.com/router-for-me/CLIProxyAPI/releases 에서 확인한다.
+> 새 버전이 나오면 https://github.com/router-for-me/CLIProxyAPI/releases 에서 최신 URL을 확인한다.
 
 ### 2.3 Credential 파일 배치
 
