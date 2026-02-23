@@ -10,3 +10,6 @@ configs/*/config.yaml
 
 # PID files (Linux process tracking)
 configs/*/.proxy.pid
+
+# Management UI assets
+configs/*/static/
