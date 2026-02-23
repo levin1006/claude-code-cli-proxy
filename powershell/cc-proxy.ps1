@@ -20,6 +20,76 @@ $script:CLI_PROXY_PROVIDER_PIDS = @{}
 # Providers correspond to: configs\<provider>\config.yaml (and auth tokens inside that folder)
 $global:CLI_PROXY_PROVIDERS = @("claude", "gemini", "codex", "antigravity")
 
+# ---- Profile bootstrap helpers ----
+$script:CC_PROXY_SCRIPT_PATH = if ($PSCommandPath) {
+  $PSCommandPath
+} else {
+  Join-Path $global:CLI_PROXY_BASE_DIR "powershell\cc-proxy.ps1"
+}
+$script:CC_PROXY_PROFILE_PROMPTED = $false
+
+function Get-CCProxyProfileLine {
+  return ". `"$($script:CC_PROXY_SCRIPT_PATH)`""
+}
+
+function Test-CCProxyProfile {
+  if (-not (Test-Path $PROFILE)) { return $false }
+
+  $profileContent = Get-Content -Path $PROFILE -Raw -ErrorAction SilentlyContinue
+  if ($null -eq $profileContent) { return $false }
+
+  return $profileContent.Contains((Get-CCProxyProfileLine))
+}
+
+function Install-CCProxyProfile {
+  $profileDir = Split-Path -Parent $PROFILE
+  if (-not (Test-Path $profileDir)) {
+    New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
+  }
+
+  if (-not (Test-Path $PROFILE)) {
+    New-Item -ItemType File -Path $PROFILE -Force | Out-Null
+  }
+
+  if (Test-CCProxyProfile) {
+    Write-Host "[cc-proxy] Profile already contains cc-proxy loader."
+    Write-Host "[cc-proxy] Profile path: $PROFILE"
+    return
+  }
+
+  $profileLine = Get-CCProxyProfileLine
+  Add-Content -Path $PROFILE -Value "`r`n$profileLine`r`n"
+
+  Write-Host "[cc-proxy] Added loader to PowerShell profile."
+  Write-Host "[cc-proxy] Profile path: $PROFILE"
+
+  try {
+    . $PROFILE
+    Write-Host "[cc-proxy] Loaded updated profile into current session."
+  }
+  catch {
+    Write-Host "[cc-proxy] Failed to load profile in current session: $($_.Exception.Message)"
+    Write-Host "[cc-proxy] You can still open a new PowerShell session to apply it."
+  }
+}
+
+function Show-CCProxyProfileSetupHint {
+  if (Test-CCProxyProfile) { return }
+  if ($script:CC_PROXY_PROFILE_PROMPTED) { return }
+
+  $script:CC_PROXY_PROFILE_PROMPTED = $true
+
+  Write-Host "[cc-proxy] First-time setup detected."
+  $answer = Read-Host "[cc-proxy] Add loader to your PowerShell profile now? (Y/N)"
+
+  if ($answer -match '^(?i:y|yes)$') {
+    Install-CCProxyProfile
+    return
+  }
+
+  Write-Host "[cc-proxy] Skipped. You can run Install-CCProxyProfile later."
+}
+
 # ---- Utilities ----
 function Get-CLIProxyProcess {
   Get-Process -Name "cli-proxy-api" -ErrorAction SilentlyContinue
@@ -270,3 +340,5 @@ function cc-ag {
 # Convenience
 function cc-proxy-status { Get-CLIProxyStatus }
 function cc-proxy-stop   { Stop-CLIProxy }
+
+Show-CCProxyProfileSetupHint

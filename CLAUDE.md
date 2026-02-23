@@ -42,6 +42,14 @@ Defined in `powershell/cc-proxy.ps1`:
 . .\powershell\cc-proxy.ps1
 ```
 
+### Register helpers in PowerShell profile (recommended first-time setup)
+```powershell
+. .\powershell\cc-proxy.ps1
+Install-CCProxyProfile
+```
+`Install-CCProxyProfile` updates `$PROFILE` and loads it into the current session immediately.
+New PowerShell sessions will auto-load helpers via the profile line.
+
 ### Run Claude Code
 ```powershell
 cc
