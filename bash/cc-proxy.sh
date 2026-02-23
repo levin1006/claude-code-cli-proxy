@@ -6,7 +6,12 @@
 # Source this file:  source /path/to/bash/cc-proxy.sh
 
 # ---- CONFIG ----
-CC_PROXY_BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Detect script path: BASH_SOURCE for bash, $0 for zsh (where $0 is the sourced file path)
+if [[ -n "${BASH_VERSION:-}" ]]; then
+  CC_PROXY_BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+else
+  CC_PROXY_BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+fi
 CC_PROXY_EXE="${CC_PROXY_BASE_DIR}/cli-proxy-api"
 CC_PROXY_HOST="127.0.0.1"
 CC_PROXY_MANAGEMENT_PATH="/management.html"
@@ -451,7 +456,8 @@ cc_proxy_install_profile() {
   fi
 
   if $installed; then
-    echo "[cc-proxy] Open a new terminal or run: source ${CC_PROXY_BASE_DIR}/bash/cc-proxy.sh"
+    echo "[cc-proxy] New terminals will auto-load helpers."
+    echo "[cc-proxy] Functions are already available in this session."
   fi
 }
 
@@ -467,7 +473,8 @@ _cc_proxy_show_profile_hint() {
   done
 
   echo "[cc-proxy] First-time setup detected."
-  read -rp "[cc-proxy] Add loader to your shell profile now? (Y/N) " answer
+  printf "[cc-proxy] Add loader to your shell profile now? (Y/N) "
+  read -r answer
   case "$answer" in
     [Yy]|[Yy][Ee][Ss]) cc_proxy_install_profile ;;
     *) echo "[cc-proxy] Skipped. Run cc_proxy_install_profile later." ;;
