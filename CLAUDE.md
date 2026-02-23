@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## High-level architecture
 1. `cc-<provider>` functions in `powershell/cc-proxy.ps1` start a provider-specific proxy instance and then run `claude` with temporary env vars.
 2. Provider isolation is done by working directory + `auth-dir: "./"` in each provider config, so each instance only sees credentials in its own folder.
-3. Base config files define `port: 8317`, but the script generates `configs/<provider>/.config.runtime.yaml` with provider-specific ports and starts `cli-proxy-api.exe -config <runtime-file>`.
+3. Base config files define `port: 8317`; startup rewrites provider base `config.yaml` with provider-specific port and launches `cli-proxy-api.exe -config <base-config-file>`.
 4. `Invoke-CCProxy` temporarily sets:
    - `ANTHROPIC_BASE_URL`
    - `ANTHROPIC_AUTH_TOKEN=sk-dummy`
@@ -87,7 +87,10 @@ http://127.0.0.1:<provider-port>/management.html
 
 ## Editing guidance for future Claude instances
 - Prefer editing `powershell/cc-proxy.ps1` and `configs/*/config.yaml`.
-- Treat `configs/*/.config.runtime.yaml` as generated artifacts (created/overwritten by startup logic) and keep them untracked.
+- Treat `configs/*/.config.runtime.yaml` as generated artifacts and keep them untracked.
+- Use provider base `config.yaml` as dashboard-connected runtime source of truth.
+- Do not enforce `remote-management.secret-key`; allow dashboard-managed values.
+- For new providers, copy root `config.yaml` as a template and then set provider port.
 - Treat `**/main.log` as runtime log output and keep it untracked.
 - Keep root `config.yaml` tracked as a bootstrap config for issuing new auth tokens near `cli-proxy-api.exe`.
 - If changing provider ports, update `CLI_PROXY_PORTS` in `powershell/cc-proxy.ps1`; do not rely only on base `config.yaml` ports.

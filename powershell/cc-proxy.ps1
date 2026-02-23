@@ -166,11 +166,17 @@ function Start-CLIProxy([Parameter(Mandatory=$true)][ValidateSet("claude","gemin
 
   $baseConfigPath = Join-Path $wd "config.yaml"
   if (-not (Test-Path $baseConfigPath)) {
-    throw "Provider config.yaml not found: $baseConfigPath"
+    $rootBootstrapConfigPath = Join-Path $global:CLI_PROXY_BASE_DIR "config.yaml"
+    if (-not (Test-Path $rootBootstrapConfigPath)) {
+      throw "Provider config.yaml not found and root bootstrap config.yaml is missing: $baseConfigPath"
+    }
+
+    Copy-Item -Path $rootBootstrapConfigPath -Destination $baseConfigPath -Force
   }
 
+  Stop-CLIProxy -Provider $Provider
+
   $port = Get-CLIProxyPort $Provider
-  $runtimeConfigPath = Join-Path $wd ".config.runtime.yaml"
   $configContent = Get-Content -Path $baseConfigPath -Raw
 
   if ($configContent -match "(?m)^\s*port\s*:\s*\d+\s*$") {
@@ -179,11 +185,9 @@ function Start-CLIProxy([Parameter(Mandatory=$true)][ValidateSet("claude","gemin
     $configContent = "port: $port`r`n" + $configContent
   }
 
-  Set-Content -Path $runtimeConfigPath -Value $configContent -Encoding UTF8
+  Set-Content -Path $baseConfigPath -Value $configContent -Encoding UTF8
 
-  Stop-CLIProxy -Provider $Provider
-
-  $proc = Start-Process -WindowStyle Hidden -FilePath $global:CLI_PROXY_EXE -WorkingDirectory $wd -ArgumentList @("-config", $runtimeConfigPath) -PassThru
+  $proc = Start-Process -WindowStyle Hidden -FilePath $global:CLI_PROXY_EXE -WorkingDirectory $wd -ArgumentList @("-config", $baseConfigPath) -PassThru
   $script:CLI_PROXY_PROVIDER_PIDS[$Provider] = $proc.Id
 
   # Health check (fast, bounded)
@@ -324,7 +328,7 @@ function cc-codex {
   Invoke-CCProxy `
     "codex" `
     "gpt-5.3-codex(xhigh)" `
-    "gpt-5.3-codex(xhigh)" `
+    "gpt-5.3-codex(high)" `
     "gpt-5.3-codex-spark"
 }
 

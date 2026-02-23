@@ -78,3 +78,5 @@ curl.exe http://127.0.0.1:18417/v1/models
 - `configs/*/logs/`는 `.gitignore`로 제외되어 있습니다.
 - `configs/*/.config.runtime.yaml` 및 `**/main.log`는 실행 중 생성/갱신되는 파일이므로 `.gitignore`로 추적 제외합니다.
 - 루트 `config.yaml`은 `cli-proxy-api.exe`와 같은 경로에 두고 신규 인증 토큰 발급/초기 설정 시작점으로 사용합니다.
+- provider별 `config.yaml`은 dashboard가 직접 갱신하는 운영 파일로 사용하며 Git 추적에서 제외합니다.
+- 신규 provider는 루트 `config.yaml`을 템플릿으로 복사한 뒤 provider 포트(예: 18417~18420)를 설정해 사용합니다.
