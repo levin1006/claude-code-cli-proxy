@@ -1,2 +1,4 @@
 configs/*/logs/
 configs/*/*.json
+configs/*/.config.runtime.yaml
+**/main.log

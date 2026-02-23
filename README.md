@@ -14,6 +14,7 @@ Windows PowerShell에서 `cli-proxy-api.exe`를 provider별로 분리 실행하�
 - `powershell/cc-proxy.ps1` (PowerShell helper functions)
 - `configs/<provider>/config.yaml` (+ credential JSON)
 - `docs/claude-code-cliproxy-windows-guide.md` (운영 가이드)
+- `config.yaml` (루트 샘플/운영용 기본 설정: 신규 인증 토큰 발급 및 초기 설정 부트스트랩 용도)
 
 ## 빠른 시작
 
@@ -42,7 +43,8 @@ cc                 # Native Claude Code (proxy env 제거)
 cc-claude          # Claude provider proxy 경유
 cc-gemini          # Gemini provider proxy 경유
 cc-codex           # Codex provider proxy 경유
-cc-ag              # Antigravity provider proxy 경유
+cc-ag-claude       # Antigravity provider proxy 경유 (Claude 계열 모델 세트)
+cc-ag-gemini       # Antigravity provider proxy 경유 (Gemini 계열 모델 세트)
 
 cc-proxy-status    # proxy 상태 확인
 cc-proxy-stop      # proxy 중지
@@ -74,3 +76,5 @@ curl.exe http://127.0.0.1:18417/v1/models
 - `configs/*/*.json`은 credential/token 정보를 포함할 수 있습니다.
 - 공개 저장소로 push하기 전에는 credential 유출 여부를 반드시 점검하세요.
 - `configs/*/logs/`는 `.gitignore`로 제외되어 있습니다.
+- `configs/*/.config.runtime.yaml` 및 `**/main.log`는 실행 중 생성/갱신되는 파일이므로 `.gitignore`로 추적 제외합니다.
+- 루트 `config.yaml`은 `cli-proxy-api.exe`와 같은 경로에 두고 신규 인증 토큰 발급/초기 설정 시작점으로 사용합니다.

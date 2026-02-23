@@ -172,7 +172,7 @@ Management Center에서는 다음을 확인할 수 있다.
 아래 스크립트는 다음을 제공한다.
 
 - `cc` : 순정 Claude Code 실행(프록시 관련 env 제거)
-- `cc-claude / cc-gemini / cc-codex / cc-ag` : provider 전용 CLIProxyAPI 재시작 + 모델 매핑 후 Claude Code 실행
+- `cc-claude / cc-gemini / cc-codex / cc-ag-claude / cc-ag-gemini` : provider 전용 CLIProxyAPI 재시작 + 모델 매핑 후 Claude Code 실행
 - `cc-proxy-status` : 프록시 상태 확인
 - `cc-proxy-stop` : 프록시 종료
 - 프록시 health check 성공 시 Management UI 자동 오픈(세션당 1회)
@@ -326,12 +326,20 @@ function cc-codex {
     "gpt-5.3-codex-spark"
 }
 
-function cc-ag {
+function cc-ag-claude {
   Start-CLIProxy "antigravity"
   Invoke-CCProxy `
     "claude-opus-4-6-thinking" `
+    "claude-sonnet-4-6" `
+    "claude-sonnet-4-6"
+}
+
+function cc-ag-gemini {
+  Start-CLIProxy "antigravity"
+  Invoke-CCProxy `
     "gemini-3.1-pro-high" `
-    "gemini-3.1-pro-low"
+    "gemini-3.1-pro-low" `
+    "gemini-3-flash"
 }
 
 # Convenience
@@ -362,12 +370,17 @@ cc-gemini
 cc-codex
 ```
 
-### 8.5 Antigravity provider만 사용
+### 8.5 Antigravity provider 사용 (Claude 계열 세트)
 ```powershell
-cc-ag
+cc-ag-claude
 ```
 
-### 8.6 프록시 상태 확인/종료
+### 8.6 Antigravity provider 사용 (Gemini 계열 세트)
+```powershell
+cc-ag-gemini
+```
+
+### 8.7 프록시 상태 확인/종료
 ```powershell
 cc-proxy-status
 cc-proxy-stop

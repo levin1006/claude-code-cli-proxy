@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `configs/<provider>/config.yaml` (+ provider credential JSON files)
   - `powershell/cc-proxy.ps1` (orchestration and Claude Code launcher helpers)
   - `docs/claude-code-cliproxy-windows-guide.md` (operational background)
+  - `config.yaml` at repo root (bootstrap config used when issuing new auth tokens near `cli-proxy-api.exe`)
 - References:
   - Official repository: https://github.com/router-for-me/CLIProxyAPI
   - API guide: https://help.router-for.me/
@@ -61,7 +62,8 @@ Runs native Claude Code (proxy env vars removed).
 cc-claude
 cc-gemini
 cc-codex
-cc-ag
+cc-ag-claude
+cc-ag-gemini
 ```
 
 ### Proxy status and stop
@@ -85,7 +87,9 @@ http://127.0.0.1:<provider-port>/management.html
 
 ## Editing guidance for future Claude instances
 - Prefer editing `powershell/cc-proxy.ps1` and `configs/*/config.yaml`.
-- Treat `configs/*/.config.runtime.yaml` as generated artifacts (created/overwritten by startup logic).
+- Treat `configs/*/.config.runtime.yaml` as generated artifacts (created/overwritten by startup logic) and keep them untracked.
+- Treat `**/main.log` as runtime log output and keep it untracked.
+- Keep root `config.yaml` tracked as a bootstrap config for issuing new auth tokens near `cli-proxy-api.exe`.
 - If changing provider ports, update `CLI_PROXY_PORTS` in `powershell/cc-proxy.ps1`; do not rely only on base `config.yaml` ports.
 - `routing.strategy` is set to `round-robin` in provider configs.
 
