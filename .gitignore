@@ -5,7 +5,7 @@ configs/*/config.yaml
 **/main.log
 
 # Linux binary (user downloads separately)
-/cli-proxy-api
+!/cli-proxy-api
 !/cli-proxy-api.exe
 
 # PID files (Linux process tracking)
