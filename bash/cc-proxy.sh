@@ -283,6 +283,53 @@ cc_proxy_status() {
   unset -f _cc_proxy_status_one
 }
 
+# ---- Auth ----
+cc_proxy_auth() {
+  local provider="$1"
+  _cc_proxy_validate_provider "$provider" || return 1
+
+  if [[ ! -x "$CC_PROXY_EXE" ]]; then
+    echo "[cc-proxy] cli-proxy-api not found or not executable: ${CC_PROXY_EXE}" >&2
+    return 1
+  fi
+
+  local wd="${CC_PROXY_BASE_DIR}/configs/${provider}"
+  if [[ ! -d "$wd" ]]; then
+    echo "[cc-proxy] Provider config directory not found: ${wd}" >&2
+    return 1
+  fi
+
+  # Ensure provider config exists (copy from root bootstrap if missing)
+  local base_config="${wd}/config.yaml"
+  if [[ ! -f "$base_config" ]]; then
+    local root_bootstrap="${CC_PROXY_BASE_DIR}/config.yaml"
+    if [[ -f "$root_bootstrap" ]]; then
+      cp "$root_bootstrap" "$base_config"
+    fi
+  fi
+
+  # Map provider name to binary login flag
+  local login_flag
+  case "$provider" in
+    claude)       login_flag="-claude-login" ;;
+    gemini)       login_flag="-login" ;;
+    codex)        login_flag="-codex-login" ;;
+    antigravity)  login_flag="-antigravity-login" ;;
+  esac
+
+  # Suppress automatic browser launch in headless/SSH environments
+  local extra_flags=()
+  if ! _cc_proxy_should_open_management; then
+    extra_flags+=("-no-browser")
+  fi
+
+  echo "[cc-proxy] Starting auth for provider '${provider}'..."
+  echo "[cc-proxy] Token file will be saved to: ${wd}"
+
+  # Run binary from provider directory so auth-dir "./" resolves there
+  (cd "$wd" && "$CC_PROXY_EXE" -config "$base_config" $login_flag "${extra_flags[@]}")
+}
+
 # ---- Management UI ----
 _cc_proxy_should_open_management() {
   local mode="${CC_PROXY_MANAGEMENT_AUTO_OPEN}"
@@ -454,6 +501,7 @@ cc-ag-gemini() {
 # ---- Convenience aliases ----
 cc-proxy-status() { cc_proxy_status "$@"; }
 cc-proxy-stop()   { cc_proxy_stop "$@"; }
+cc-proxy-auth()   { cc_proxy_auth "$@"; }
 
 # ---- Profile bootstrap ----
 _cc_proxy_profile_line() {

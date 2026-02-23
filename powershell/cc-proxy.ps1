@@ -13,7 +13,11 @@ $global:CLI_PROXY_PORTS    = @{
   antigravity = 18420
 }
 $global:CLI_PROXY_MANAGEMENT_PATH = "/management.html"
-$global:CLI_PROXY_MANAGEMENT_AUTO_OPEN = $true
+$global:CLI_PROXY_MANAGEMENT_AUTO_OPEN = if ($env:CLI_PROXY_MANAGEMENT_AUTO_OPEN) {
+  $env:CLI_PROXY_MANAGEMENT_AUTO_OPEN
+} else {
+  "auto"
+}
 $script:CLI_PROXY_MANAGEMENT_OPENED = @{}
 $script:CLI_PROXY_PROVIDER_PIDS = @{}
 
@@ -257,8 +261,77 @@ function Get-CLIProxyStatus([ValidateSet("claude","gemini","codex","antigravity"
   }
 }
 
+function Invoke-CLIProxyAuth([Parameter(Mandatory=$true)][ValidateSet("claude","gemini","codex","antigravity")][string]$Provider) {
+  if (-not (Test-Path $global:CLI_PROXY_EXE)) {
+    throw "cli-proxy-api.exe not found at: $($global:CLI_PROXY_EXE)"
+  }
+
+  $wd = Join-Path $global:CLI_PROXY_BASE_DIR ("configs\" + $Provider)
+  if (-not (Test-Path $wd)) {
+    throw "Provider config directory not found: $wd"
+  }
+
+  # Ensure provider config exists (copy from root bootstrap if missing)
+  $baseConfigPath = Join-Path $wd "config.yaml"
+  if (-not (Test-Path $baseConfigPath)) {
+    $rootBootstrapConfigPath = Join-Path $global:CLI_PROXY_BASE_DIR "config.yaml"
+    if (Test-Path $rootBootstrapConfigPath) {
+      Copy-Item -Path $rootBootstrapConfigPath -Destination $baseConfigPath -Force
+    }
+  }
+
+  # Map provider name to binary login flag
+  $loginFlag = switch ($Provider) {
+    "claude"      { "-claude-login" }
+    "gemini"      { "-login" }
+    "codex"       { "-codex-login" }
+    "antigravity" { "-antigravity-login" }
+  }
+
+  # Suppress automatic browser launch in headless/SSH environments
+  $extraFlags = @()
+  if (-not (Test-CLIProxyShouldOpenManagementUI)) {
+    $extraFlags += "-no-browser"
+  }
+
+  Write-Host "[cc-proxy] Starting auth for provider '$Provider'..."
+  Write-Host "[cc-proxy] Token file will be saved to: $wd"
+
+  # Run binary from provider directory so auth-dir "./" resolves there
+  Push-Location $wd
+  try {
+    & $global:CLI_PROXY_EXE -config $baseConfigPath $loginFlag @extraFlags
+  }
+  finally {
+    Pop-Location
+  }
+}
+
+function Test-CLIProxyShouldOpenManagementUI {
+  $mode = "$($global:CLI_PROXY_MANAGEMENT_AUTO_OPEN)".ToLowerInvariant()
+
+  switch ($mode) {
+    "never" { return $false }
+    "false" { return $false }
+    "0"     { return $false }
+    "always" { return $true }
+    "true"   { return $true }
+    "1"      { return $true }
+    "auto" {
+      # Do not auto-open browser in SSH sessions
+      if ($env:SSH_CONNECTION -or $env:SSH_TTY) { return $false }
+
+      # Auto-open only when running in an interactive desktop session
+      if (-not [Environment]::UserInteractive) { return $false }
+
+      return $true
+    }
+    default { return $false }
+  }
+}
+
 function Open-CLIProxyManagementUI([Parameter(Mandatory=$true)][ValidateSet("claude","gemini","codex","antigravity")][string]$Provider) {
-  if (-not $global:CLI_PROXY_MANAGEMENT_AUTO_OPEN) { return }
+  if (-not (Test-CLIProxyShouldOpenManagementUI)) { return }
   if ($script:CLI_PROXY_MANAGEMENT_OPENED[$Provider]) { return }
 
   $managementUrl = "$(Get-CLIProxyUrl $Provider)$($global:CLI_PROXY_MANAGEMENT_PATH)"
@@ -363,5 +436,6 @@ function cc-ag-gemini {
 # Convenience
 function cc-proxy-status { Get-CLIProxyStatus }
 function cc-proxy-stop   { Stop-CLIProxy }
+function cc-proxy-auth   { Invoke-CLIProxyAuth @args }
 
 Show-CCProxyProfileSetupHint
