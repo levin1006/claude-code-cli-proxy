@@ -324,17 +324,26 @@ function cc-codex {
   Invoke-CCProxy `
     "codex" `
     "gpt-5.3-codex(xhigh)" `
-    "gpt-5.3-codex(high)" `
+    "gpt-5.3-codex(xhigh)" `
     "gpt-5.3-codex-spark"
 }
 
-function cc-ag {
+function cc-ag-claude {
   Start-CLIProxy "antigravity"
   Invoke-CCProxy `
     "antigravity" `
     "claude-opus-4-6-thinking" `
+    "claude-sonnet-4-6" `
+    "claude-sonnet-4-6"
+}
+
+function cc-ag-gemini {
+  Start-CLIProxy "antigravity"
+  Invoke-CCProxy `
+    "antigravity" `
     "gemini-3.1-pro-high" `
-    "gemini-3.1-pro-low"
+    "gemini-3.1-pro-low" `
+    "gemini-3-flash"
 }
 
 # Convenience
