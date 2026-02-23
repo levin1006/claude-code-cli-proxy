@@ -174,7 +174,17 @@ function Start-CLIProxy([Parameter(Mandatory=$true)][ValidateSet("claude","gemin
     Copy-Item -Path $rootBootstrapConfigPath -Destination $baseConfigPath -Force
   }
 
-  Stop-CLIProxy -Provider $Provider
+  $existingPid = Resolve-CLIProxyPidByPort $Provider
+  if ($existingPid) {
+    $script:CLI_PROXY_PROVIDER_PIDS[$Provider] = $existingPid
+
+    if (Test-CLIProxyHealth -Provider $Provider) {
+      Open-CLIProxyManagementUI -Provider $Provider
+      return
+    }
+
+    throw "Existing CLIProxyAPI process is listening on $(Get-CLIProxyUrl $Provider) but is not healthy. Run cc-proxy-stop (or Stop-CLIProxy -Provider `"$Provider`") and retry."
+  }
 
   $port = Get-CLIProxyPort $Provider
   $configContent = Get-Content -Path $baseConfigPath -Raw
