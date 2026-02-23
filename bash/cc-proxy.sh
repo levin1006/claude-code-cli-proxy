@@ -109,6 +109,33 @@ _cc_proxy_resolve_pid_by_port() {
   [[ -n "$pid" ]] && echo "$pid"
 }
 
+_cc_proxy_find_free_auth_port() {
+  local start_port="${1:-3000}"
+  local max_port="${2:-3010}"
+  local p
+
+  for p in $(seq "$start_port" "$max_port"); do
+    if command -v ss >/dev/null 2>&1; then
+      if ! ss -tln | grep -qE ":${p}\b"; then
+        echo "$p"
+        return 0
+      fi
+    elif command -v netstat >/dev/null 2>&1; then
+      if ! netstat -tln | grep -qE ":${p}\b"; then
+        echo "$p"
+        return 0
+      fi
+    else
+      # Minimal fallback using /dev/tcp (may hang slightly if not responding)
+      if ! (echo > "/dev/tcp/127.0.0.1/${p}") >/dev/null 2>&1; then
+        echo "$p"
+        return 0
+      fi
+    fi
+  done
+  echo "$start_port"
+}
+
 # ---- Lifecycle ----
 cc_proxy_start() {
   local provider="$1"
@@ -323,7 +350,12 @@ cc_proxy_auth() {
     extra_flags+=("-no-browser")
   fi
 
-  echo "[cc-proxy] Starting auth for provider '${provider}'..."
+  # Find a free port for the OAuth callback to avoid "address already in use" errors
+  local free_port
+  free_port="$(_cc_proxy_find_free_auth_port 3000 3020)"
+  extra_flags+=("-oauth-callback-port" "$free_port")
+
+  echo "[cc-proxy] Starting auth for provider '${provider}' (using callback port ${free_port})..."
   echo "[cc-proxy] Token file will be saved to: ${wd}"
 
   # Run binary from provider directory so auth-dir "./" resolves there

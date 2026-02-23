@@ -124,6 +124,17 @@ function Resolve-CLIProxyPidByPort([Parameter(Mandatory=$true)][ValidateSet("cla
   return $null
 }
 
+function Find-CLIProxyFreeAuthPort {
+  param([int]$StartPort = 3000, [int]$MaxPort = 3010)
+  for ($p = $StartPort; $p -le $MaxPort; $p++) {
+    $conn = Get-NetTCPConnection -LocalAddress $global:CLI_PROXY_HOST -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $conn) {
+      return $p
+    }
+  }
+  return $StartPort
+}
+
 function Stop-CLIProxy([ValidateSet("claude","gemini","codex","antigravity")][string]$Provider) {
   if ($Provider) {
     $proxyPid = $script:CLI_PROXY_PROVIDER_PIDS[$Provider]
@@ -199,7 +210,8 @@ function Start-CLIProxy([Parameter(Mandatory=$true)][ValidateSet("claude","gemin
     $configContent = "port: $port`r`n" + $configContent
   }
 
-  Set-Content -Path $baseConfigPath -Value $configContent -Encoding UTF8
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($baseConfigPath, $configContent, $utf8NoBom)
 
   $proc = Start-Process -WindowStyle Hidden -FilePath $global:CLI_PROXY_EXE -WorkingDirectory $wd -ArgumentList @("-config", $baseConfigPath) -PassThru
   $script:CLI_PROXY_PROVIDER_PIDS[$Provider] = $proc.Id
@@ -294,7 +306,12 @@ function Invoke-CLIProxyAuth([Parameter(Mandatory=$true)][ValidateSet("claude","
     $extraFlags += "-no-browser"
   }
 
-  Write-Host "[cc-proxy] Starting auth for provider '$Provider'..."
+  # Find a free port for the OAuth callback to avoid "address already in use" errors
+  $freePort = Find-CLIProxyFreeAuthPort -StartPort 3000 -MaxPort 3020
+  $extraFlags += "-oauth-callback-port"
+  $extraFlags += "$freePort"
+
+  Write-Host "[cc-proxy] Starting auth for provider '$Provider' (using callback port $freePort)..."
   Write-Host "[cc-proxy] Token file will be saved to: $wd"
 
   # Run binary from provider directory so auth-dir "./" resolves there
