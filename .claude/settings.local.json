@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "mcp__plugin_serena_serena__activate_project"
+      "mcp__plugin_serena_serena__activate_project",
+      "Bash(pwsh:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(git:*)"
     ]
   }
 }
