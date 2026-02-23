@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - API guide: https://help.router-for.me/
 
 ## High-level architecture
-1. `cc-<provider>` functions in `powershell/cc-proxy.ps1` start a provider-specific proxy instance and then run `claude` with temporary env vars.
+1. `cc-<provider>` functions in `powershell/cc-proxy.ps1` reuse a healthy provider-specific proxy instance when available (start only if needed), then run `claude` with temporary env vars.
 2. Provider isolation is done by working directory + `auth-dir: "./"` in each provider config, so each instance only sees credentials in its own folder.
 3. Base config files define `port: 8317`; startup rewrites provider base `config.yaml` with provider-specific port and launches `cli-proxy-api.exe -config <base-config-file>`.
 4. `Invoke-CCProxy` temporarily sets:
@@ -71,6 +71,8 @@ cc-ag-gemini
 cc-proxy-status
 cc-proxy-stop
 ```
+`cc-*` commands do not force-stop a healthy running provider proxy; they reuse it and only start if needed.
+Use `cc-proxy-stop` when you want an explicit shutdown.
 
 ### Health/model checks (single-provider smoke test)
 Use `curl.exe` (not PowerShell `curl` alias):

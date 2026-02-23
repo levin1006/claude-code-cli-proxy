@@ -40,14 +40,14 @@ Install-CCProxyProfile
 
 ```powershell
 cc                 # Native Claude Code (proxy env 제거)
-cc-claude          # Claude provider proxy 경유
-cc-gemini          # Gemini provider proxy 경유
-cc-codex           # Codex provider proxy 경유
+cc-claude          # Claude provider proxy 경유 (기동 필요 시 시작, 실행 중이면 재사용)
+cc-gemini          # Gemini provider proxy 경유 (기동 필요 시 시작, 실행 중이면 재사용)
+cc-codex           # Codex provider proxy 경유 (기동 필요 시 시작, 실행 중이면 재사용)
 cc-ag-claude       # Antigravity provider proxy 경유 (Claude 계열 모델 세트)
 cc-ag-gemini       # Antigravity provider proxy 경유 (Gemini 계열 모델 세트)
 
 cc-proxy-status    # proxy 상태 확인
-cc-proxy-stop      # proxy 중지
+cc-proxy-stop      # proxy 중지(명시적으로 종료할 때만 사용)
 ```
 
 ## 포트 매핑

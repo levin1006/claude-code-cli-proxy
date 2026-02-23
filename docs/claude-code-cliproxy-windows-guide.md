@@ -33,9 +33,9 @@ Claude Code는 기본적으로 Anthropic API를 호출한다. 하지만 아래 �
 
 그래서 최종적으로 선택한 전략은:
 
-✅ **한 번에 CLIProxyAPI 인스턴스는 1개(포트 8317 하나)**만 띄우되,  
-✅ **WorkingDirectory를 provider별 configs 폴더로 바꿔 재시작**하여,  
-✅ `auth-dir: "./"`로 각 provider 폴더의 토큰만 로드하게 강제한다.
+✅ provider별 고정 포트(`18417`~`18420`)를 사용하고,
+✅ 각 provider의 WorkingDirectory(`configs/<provider>`)를 유지하며,
+✅ `auth-dir: "./"`로 해당 provider 폴더 토큰만 로드하게 강제한다.
 
 이렇게 하면 **원치 않는 provider 혼입이 구조적으로 불가능**해진다.
 
@@ -75,17 +75,17 @@ CLIProxyAPI_6.8.24_windows_amd64/
 - `configs/antigravity`에서 실행 ⇒ Antigravity 토큰만 로드
 
 ### 2.2 한 PC에서 여러 인스턴스를 동시에 띄울 수 있나?
-구조적으로는 **가능**하지만, 현재 제공한 `cc-*` 함수 동작은 의도적으로 **항상 단일 인스턴스**다.
+현재 구조는 provider별로 **고정 포트**를 사용하므로 동시 실행이 가능하다.
 
-- `Start-CLIProxy` 내부에서 먼저 `Stop-CLIProxy`를 호출해 기존 프로세스를 종료함
-- 모든 provider config가 기본적으로 같은 포트(`8317`)를 사용함
-- 결과적으로 여러 터미널에서 서로 다른 `cc-*`를 실행하면 마지막 실행이 이전 인스턴스를 대체함
+- `claude`: `18417`
+- `gemini`: `18418`
+- `codex`: `18419`
+- `antigravity`: `18420`
 
-즉, 지금 관찰한 "마지막 것만 남는" 현상은 정상 동작이다.
+`cc-*` 함수는 같은 provider 포트에 이미 healthy proxy가 있으면 **재시작하지 않고 재사용**한다.
+즉, 대시보드 사용 기록을 provider 단위로 이어서 관찰하려면 자동 재시작 없이 같은 프로세스를 유지하면 된다.
 
-동시 다중 인스턴스가 필요하면 다음 두 조건을 만족해야 한다.
-1. provider별로 서로 다른 `port`를 사용
-2. 각 터미널/세션에서 `ANTHROPIC_BASE_URL`을 해당 포트로 별도 지정
+명시적으로 종료가 필요할 때만 `cc-proxy-stop`을 사용한다.
 
 ---
 
@@ -172,7 +172,7 @@ Management Center에서는 다음을 확인할 수 있다.
 아래 스크립트는 다음을 제공한다.
 
 - `cc` : 순정 Claude Code 실행(프록시 관련 env 제거)
-- `cc-claude / cc-gemini / cc-codex / cc-ag-claude / cc-ag-gemini` : provider 전용 CLIProxyAPI 재시작 + 모델 매핑 후 Claude Code 실행
+- `cc-claude / cc-gemini / cc-codex / cc-ag-claude / cc-ag-gemini` : provider 전용 CLIProxyAPI를 start-if-needed/healthy-reuse로 사용 + 모델 매핑 후 Claude Code 실행
 - `cc-proxy-status` : 프록시 상태 확인
 - `cc-proxy-stop` : 프록시 종료
 - 프록시 health check 성공 시 Management UI 자동 오픈(세션당 1회)
