@@ -15,7 +15,7 @@ fi
 CC_PROXY_EXE="${CC_PROXY_BASE_DIR}/cli-proxy-api"
 CC_PROXY_HOST="127.0.0.1"
 CC_PROXY_MANAGEMENT_PATH="/management.html"
-CC_PROXY_MANAGEMENT_AUTO_OPEN=true
+CC_PROXY_MANAGEMENT_AUTO_OPEN="${CC_PROXY_MANAGEMENT_AUTO_OPEN:-auto}"
 
 declare -A CC_PROXY_PORTS=(
   [claude]=18417
@@ -284,9 +284,38 @@ cc_proxy_status() {
 }
 
 # ---- Management UI ----
+_cc_proxy_should_open_management() {
+  local mode="${CC_PROXY_MANAGEMENT_AUTO_OPEN}"
+
+  case "$mode" in
+    never|false|0)
+      return 1
+      ;;
+    always|true|1)
+      return 0
+      ;;
+    auto)
+      # Do not auto-open browser in SSH sessions (including X11 forwarding)
+      if [[ -n "${SSH_CONNECTION:-}" || -n "${SSH_TTY:-}" ]]; then
+        return 1
+      fi
+
+      # Only auto-open when a local GUI session is available
+      if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+        return 1
+      fi
+
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 _cc_proxy_open_management() {
   local provider="$1"
-  [[ "$CC_PROXY_MANAGEMENT_AUTO_OPEN" != "true" ]] && return
+  _cc_proxy_should_open_management || return
   [[ "${_CC_PROXY_MANAGEMENT_OPENED[$provider]}" == "true" ]] && return
 
   local url
