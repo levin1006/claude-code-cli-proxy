@@ -655,25 +655,31 @@ _cc_proxy_ensure_tokens() {
   fi
 
   # Check token validity
+  echo "[cc-proxy] Checking tokens for provider: $provider"
   for token_file in "${token_files[@]}"; do
-    local expire_str
+    local expire_str email
     expire_str=$(grep -oP '"expired":\s*"\K[^"]+' "$token_file" 2>/dev/null)
-    
+    email=$(grep -oP '"email":\s*"\K[^"]+' "$token_file" 2>/dev/null)
+    local label="${email:-$(basename "$token_file")}"
+
     if [[ -z "$expire_str" ]]; then
-      # No expiration field found, assume invalid or manual config
+      echo "[cc-proxy]   SKIP  $label  (no expiry field)"
       continue
     fi
-    
+
     local expire_time
     expire_time=$(date -d "$expire_str" +%s 2>/dev/null)
-    
+
     if [[ -n "$expire_time" && "$expire_time" -gt "$current_time" ]]; then
       valid_tokens=$((valid_tokens + 1))
+      local remaining=$(( (expire_time - current_time) / 3600 ))
+      echo "[cc-proxy]   OK    $label  (expires in ${remaining}h)"
     else
       expired_tokens=$((expired_tokens + 1))
-      echo "[cc-proxy] Token expired: $(basename "$token_file")"
+      echo "[cc-proxy]   EXPIRED  $label  (expired: $expire_str)"
     fi
   done
+  echo "[cc-proxy] Result: ${valid_tokens} valid, ${expired_tokens} expired"
 
   # If at least one token is still valid, we're good to go.
   if [[ "$valid_tokens" -gt 0 ]]; then
@@ -682,9 +688,6 @@ _cc_proxy_ensure_tokens() {
 
   # All tokens are expired (or couldn't be parsed). Run auth to renew.
   echo "[cc-proxy] All tokens for $provider are expired. Running auth..."
-  
-  # For Linux, we don't automatically open the browser during auth if NO_BROWSER is not set, 
-  # but the cc_proxy_auth command handles that fallback.
   cc_proxy_auth "$provider"
   return $?
 }

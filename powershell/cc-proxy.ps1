@@ -504,22 +504,29 @@ function Ensure-CLIProxyTokens([Parameter(Mandatory=$true)][ValidateSet("claude"
   $validTokens = 0
   $expiredTokens = 0
 
+  Write-Host "[cc-proxy] Checking tokens for provider: $Provider"
   foreach ($file in $tokenFiles) {
     try {
       $json = Get-Content $file.FullName -Raw | ConvertFrom-Json
+      $label = if ($json.email) { $json.email } else { $file.Name }
       if ($null -ne $json.expired) {
         $expireTime = [DateTimeOffset]::Parse($json.expired)
         if ($expireTime -gt $currentTime) {
           $validTokens++
+          $remainingHours = [int](($expireTime - $currentTime).TotalHours)
+          Write-Host "[cc-proxy]   OK      $label  (expires in ${remainingHours}h)"
         } else {
           $expiredTokens++
-          Write-Host "[cc-proxy] Token expired: $($file.Name)"
+          Write-Host "[cc-proxy]   EXPIRED $label  (expired: $($json.expired))"
         }
+      } else {
+        Write-Host "[cc-proxy]   SKIP    $label  (no expiry field)"
       }
     } catch {
-      # Ignore parse errors
+      Write-Host "[cc-proxy]   SKIP    $($file.Name)  (parse error)"
     }
   }
+  Write-Host "[cc-proxy] Result: $validTokens valid, $expiredTokens expired"
 
   if ($validTokens -gt 0) {
     return
