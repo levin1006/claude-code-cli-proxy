@@ -2,5 +2,18 @@
   - 최초에는 `cc-proxy-auth $PROVIDER`를 통해서 토큰을 config/$PROVIDER에 저장하고 있음
   - 이후에 해당 PROVIDER의 claude code를 실행 시 등록된 토큰 사용 가능 여부를 확인하고 만료된 경우 각각을 개신하도록 유도한다. windows면 브라우저를 자동으로 열고 linux면 브라우저를 열지 않음. 
   - 사용자도 수동으로 인증 로그인을 할 준비가 필요하므로 순차적으로 진행해야 함
+  - **구현 내용 (커밋 a88a330)**
+    - `bash/cc-proxy.sh`: `_cc_proxy_ensure_tokens` 함수 추가
+    - `powershell/cc-proxy.ps1`: `Ensure-CLIProxyTokens` 함수 추가
+    - `cc-claude`, `cc-gemini`, `cc-codex`, `cc-ag-claude`, `cc-ag-gemini` 진입점에 토큰 검사 삽입
+    - 토큰 파일(`configs/<provider>/<provider>-*.json`)의 `expired` 필드를 현재 시각과 비교
+    - 유효한 토큰이 없거나(파일 없음 / 전부 만료) 자동으로 `cc-proxy-auth <provider>` 호출
+    - Linux: `-no-browser` 플래그로 브라우저 자동 실행 억제 (기존 `_cc_proxy_should_open_management` 로직 재활용)
 - [x] secret key 관련 개선
   - secret 키를 넣어놔도 자꾸 바뀌고 계속 틀리다고 나오고 이러는데 관리 포인트를 줄일 수 없을까. 매번 config에 찾아와서 보고 수정하고 실행하고 다시 로그인하고 이러는 과정이 소모적임
+  - **구현 내용 (커밋 b6199e4, 58eaa5d)**
+    - 원인: `secret-key`에 평문을 넣으면 바이너리가 bcrypt로 자동 변환하는데, salt가 매번 달라 재시작마다 해시가 바뀜
+    - 해결: 모든 provider config(`config.yaml`, `configs/*/config.yaml`)에 동일한 고정 평문 설정
+    - `cc-proxy-set-secret <password>` 헬퍼 명령 추가 (bash / PowerShell 양쪽)
+      - 5개 config 파일의 `secret-key`를 일괄 교체
+      - 이후 `cc-proxy-stop && cc-<provider>` 재시작으로 적용
