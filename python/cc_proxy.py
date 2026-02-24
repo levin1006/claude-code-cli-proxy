@@ -272,69 +272,30 @@ def _parse_iso(s):
 
 
 def ensure_tokens(base_dir, provider):
-    import json
     import glob as glob_mod
 
     token_dir = get_provider_dir(base_dir, provider)
-    if not token_dir.is_dir():
-        print("[cc-proxy] Config directory for {} does not exist. Running auth...".format(provider))
-        return run_auth(base_dir, provider)
+    exe = get_binary_path(base_dir)
+    login_flag = LOGIN_FLAGS[provider]
+    auth_hint = "  {} -config configs/{}/config.yaml {}".format(
+        exe.name, provider, login_flag)
 
-    pattern = str(token_dir / "{}-*.json".format(provider))
-    token_files = sorted(glob_mod.glob(pattern))
+    token_files = sorted(glob_mod.glob(str(token_dir / "{}-*.json".format(provider))))
 
-    if not token_files:
-        print("[cc-proxy] No token files found for {}. Running auth...".format(provider))
-        return run_auth(base_dir, provider)
-
-    print("[cc-proxy] Checking tokens for provider: {}".format(provider))
-    now = datetime.now(tz=timezone.utc)
-    valid = 0
-    expired = 0
-
-    for tf in token_files:
-        try:
-            with open(tf, encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception:
-            print("[cc-proxy]   SKIP  {}  (parse error)".format(os.path.basename(tf)))
-            continue
-
-        label = data.get("email") or os.path.basename(tf)
-
-        expire_raw = data.get("expired")
-        if expire_raw is None:
-            tok = data.get("token", {})
-            if isinstance(tok, dict):
-                expire_raw = tok.get("expiry")
-
-        if expire_raw is None:
-            print("[cc-proxy]   SKIP  {}  (no expiry field)".format(label))
-            continue
-
-        expire_dt = _parse_iso(str(expire_raw))
-        if expire_dt is None:
-            print("[cc-proxy]   SKIP  {}  (cannot parse expiry: {})".format(label, expire_raw))
-            continue
-
-        if expire_dt.tzinfo is None:
-            expire_dt = expire_dt.replace(tzinfo=timezone.utc)
-
-        if expire_dt > now:
-            valid += 1
-            remaining_h = int((expire_dt - now).total_seconds() / 3600) + 1
-            print("[cc-proxy]   OK    {}  (expires in {}h)".format(label, remaining_h))
-        else:
-            expired += 1
-            print("[cc-proxy]   EXPIRED  {}  (expired: {})".format(label, expire_raw))
-
-    print("[cc-proxy] Result: {} valid, {} expired".format(valid, expired))
-
-    if valid == len(token_files):
+    if not token_dir.is_dir() or not token_files:
+        print("[cc-proxy] WARNING: No token files found for '{}'.".format(provider))
+        print("[cc-proxy] If authentication is needed, run:")
+        print("[cc-proxy] {}".format(auth_hint))
+        print("[cc-proxy] Proceeding anyway...")
         return True
 
-    print("[cc-proxy] Some tokens for {} are invalid or expired. Running auth...".format(provider))
-    return run_auth(base_dir, provider)
+    # Expiry is NOT checked here — proxy validates auth on each request.
+    # If a token is truly expired, the proxy will surface the error.
+    # To re-authenticate manually:
+    print("[cc-proxy] Token files found for '{}'. Proceeding.".format(provider))
+    print("[cc-proxy] If you hit auth errors, re-authenticate with:")
+    print("[cc-proxy] {}".format(auth_hint))
+    return True
 
 
 def start_proxy(base_dir, provider):
