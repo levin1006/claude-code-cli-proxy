@@ -455,6 +455,34 @@ function cc-proxy-status { Get-CLIProxyStatus }
 function cc-proxy-stop   { Stop-CLIProxy }
 function cc-proxy-auth   { Invoke-CLIProxyAuth @args }
 
+function Set-CLIProxySecret {
+  param([Parameter(Mandatory=$true)][string]$Secret)
+
+  $configFiles = @(
+    (Join-Path $global:CLI_PROXY_BASE_DIR "config.yaml"),
+    (Join-Path $global:CLI_PROXY_BASE_DIR "configs\claude\config.yaml"),
+    (Join-Path $global:CLI_PROXY_BASE_DIR "configs\gemini\config.yaml"),
+    (Join-Path $global:CLI_PROXY_BASE_DIR "configs\codex\config.yaml"),
+    (Join-Path $global:CLI_PROXY_BASE_DIR "configs\antigravity\config.yaml")
+  )
+
+  $updated = 0
+  foreach ($f in $configFiles) {
+    if (Test-Path $f) {
+      $content = Get-Content $f -Raw
+      $content = $content -replace '(?m)^(\s*secret-key:\s*)".*"', "`$1`"$Secret`""
+      $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+      [System.IO.File]::WriteAllText($f, $content, $utf8NoBom)
+      Write-Host "[cc-proxy] Updated: $f"
+      $updated++
+    }
+  }
+
+  Write-Host "[cc-proxy] Secret key set to '$Secret' in $updated file(s)."
+  Write-Host "[cc-proxy] Restart the proxy (cc-proxy-stop; cc-<provider>) to apply."
+}
+function cc-proxy-set-secret { Set-CLIProxySecret @args }
+
 Show-CCProxyProfileSetupHint
 function Ensure-CLIProxyTokens([Parameter(Mandatory=$true)][ValidateSet("claude","gemini","codex","antigravity")][string]$Provider) {
   $tokenDir = Join-Path $global:CLI_PROXY_BASE_DIR "configs\$Provider"

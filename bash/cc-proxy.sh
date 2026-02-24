@@ -540,6 +540,34 @@ cc-proxy-status() { cc_proxy_status "$@"; }
 cc-proxy-stop()   { cc_proxy_stop "$@"; }
 cc-proxy-auth()   { cc_proxy_auth "$@"; }
 
+cc-proxy-set-secret() {
+  local new_secret="$1"
+  if [[ -z "$new_secret" ]]; then
+    echo "[cc-proxy] Usage: cc-proxy-set-secret <password>" >&2
+    return 1
+  fi
+
+  local config_files=(
+    "${CC_PROXY_BASE_DIR}/config.yaml"
+    "${CC_PROXY_BASE_DIR}/configs/claude/config.yaml"
+    "${CC_PROXY_BASE_DIR}/configs/gemini/config.yaml"
+    "${CC_PROXY_BASE_DIR}/configs/codex/config.yaml"
+    "${CC_PROXY_BASE_DIR}/configs/antigravity/config.yaml"
+  )
+
+  local updated=0
+  for f in "${config_files[@]}"; do
+    if [[ -f "$f" ]]; then
+      sed -i -E "s|^(\\s*secret-key:\\s*)\".*\"|\1\"${new_secret}\"|" "$f"
+      echo "[cc-proxy] Updated: $f"
+      updated=$((updated + 1))
+    fi
+  done
+
+  echo "[cc-proxy] Secret key set to '${new_secret}' in ${updated} file(s)."
+  echo "[cc-proxy] Restart the proxy (cc-proxy-stop && cc-<provider>) to apply."
+}
+
 # ---- Profile bootstrap ----
 _cc_proxy_profile_line() {
   echo "source \"${CC_PROXY_BASE_DIR}/bash/cc-proxy.sh\""
