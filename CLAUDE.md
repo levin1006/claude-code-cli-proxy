@@ -5,13 +5,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository overview
 - This repo is an **operations/config workspace** for a prebuilt CLIProxyAPI binary, not the source code of the proxy itself.
 - **Supported platforms**: Windows (PowerShell) and Linux Ubuntu (Bash).
+- **Python 3.8+** required (stdlib only, no pip install).
 - Binary version in this repo: `CLIProxyAPI_6.8.24_windows_amd64`.
 - Main moving parts:
   - `cli-proxy-api.exe` (Windows binary, prebuilt)
   - `cli-proxy-api` (Linux binary, user downloads separately; gitignored)
   - `configs/<provider>/config.yaml` (+ provider credential JSON files)
-  - `powershell/cc-proxy.ps1` (Windows orchestration and Claude Code launcher helpers)
-  - `bash/cc-proxy.sh` (Linux orchestration and Claude Code launcher helpers)
+  - `python/cc_proxy.py` (cross-platform core logic — single source of truth)
+  - `powershell/cc-proxy.ps1` (Windows thin wrapper, ~50 lines, delegates to Python core)
+  - `bash/cc-proxy.sh` (Linux thin wrapper, ~50 lines, delegates to Python core)
   - `docs/claude-code-cliproxy-windows-guide.md` (Windows operational background)
   - `docs/claude-code-cliproxy-linux-guide.md` (Linux operational background)
   - `config.yaml` at repo root (bootstrap config used when issuing new auth tokens near the binary)
@@ -20,25 +22,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - API guide: https://help.router-for.me/
 
 ## High-level architecture
-1. `cc-<provider>` functions in `powershell/cc-proxy.ps1` (Windows) or `bash/cc-proxy.sh` (Linux) reuse a healthy provider-specific proxy instance when available (start only if needed), then run `claude` with temporary env vars.
-2. Provider isolation is done by working directory + `auth-dir: "./"` in each provider config, so each instance only sees credentials in its own folder.
-3. Base config files define `port: 8317`; startup rewrites provider base `config.yaml` with provider-specific port and launches the binary with `-config <base-config-file>`.
-4. `Invoke-CCProxy` (Windows) / `_cc_proxy_invoke` (Linux) temporarily sets:
+
+### New architecture (Python core + thin wrappers)
+```
+Shell wrappers (thin)             Python core (shared)
+┌──────────────────────┐         ┌──────────────────────────┐
+│ bash/cc-proxy.sh     │─call──> │                          │
+│  ~50 lines           │         │  python/cc_proxy.py      │
+├──────────────────────┤         │  ~650 lines, stdlib only │
+│ powershell/          │─call──> │  cross-platform          │
+│  cc-proxy.ps1        │         │                          │
+│  ~50 lines           │         └──────────────────────────┘
+└──────────────────────┘
+```
+
+1. Shell wrappers (`cc-<provider>` functions) call `python3 python/cc_proxy.py run <preset> -- [args]`.
+2. `python/cc_proxy.py` contains ALL logic: token validation, proxy start/stop, health check, claude invocation.
+3. Provider isolation is done by working directory + `auth-dir: "./"` in each provider config, so each instance only sees credentials in its own folder.
+4. Startup rewrites provider base `config.yaml` with provider-specific port and launches the binary with `-config <base-config-file>`.
+5. `python/cc_proxy.py run` sets env vars for the claude child process directly (no shell env modification needed):
    - `ANTHROPIC_BASE_URL`
    - `ANTHROPIC_AUTH_TOKEN=sk-dummy`
    - `ANTHROPIC_DEFAULT_OPUS_MODEL`
    - `ANTHROPIC_DEFAULT_SONNET_MODEL`
    - `ANTHROPIC_DEFAULT_HAIKU_MODEL`
-   then restores previous values after `claude` exits.
 
-### Linux-specific architecture notes
-- **Process tracking**: PID files at `configs/<provider>/.proxy.pid` (replaces PowerShell in-memory `$script:` state).
-- **Port resolution**: `ss -tlnp` (primary) / `lsof` (fallback) — replaces `Get-NetTCPConnection`.
-- **Background launch**: `nohup ... &` — replaces `Start-Process -WindowStyle Hidden`.
-- **Base dir**: Auto-detected via `BASH_SOURCE[0]` (no hardcoded paths).
+### Platform abstraction in Python core
+| Operation | Linux | Windows |
+|---|---|---|
+| Binary name | `cli-proxy-api` | `cli-proxy-api.exe` |
+| Port → PID | `ss -tlnp` / `lsof` fallback | `netstat -ano -p TCP` |
+| PID alive | `os.kill(pid, 0)` | `tasklist /FI "PID eq N"` |
+| Kill process | `os.kill(SIGTERM)` | `taskkill /PID N /F` |
+| Background launch | `Popen(start_new_session=True)` | `Popen(creationflags=CREATE_NO_WINDOW)` |
+| Health check | `urllib.request.urlopen()` | same |
+| Browser open | `webbrowser.open()` + SSH/DISPLAY guard | `webbrowser.open()` + SSH guard |
+
+### Process tracking
+- **PID files**: `configs/<provider>/.proxy.pid` on both platforms (replaces PowerShell in-memory `$script:` state).
+- **Base dir**: Auto-detected via `Path(__file__).parent.parent` in Python (no hardcoded paths).
 
 ### Port model in this repo
-Defined in `powershell/cc-proxy.ps1` and `bash/cc-proxy.sh`:
+Defined in `python/cc_proxy.py` (single source of truth, synced to both shell wrappers):
 - `claude`: `18417`
 - `gemini`: `18418`
 - `codex`: `18419`
@@ -115,16 +140,16 @@ http://127.0.0.1:<provider-port>/management.html
 ```
 
 ## Editing guidance for future Claude instances
-- Prefer editing `powershell/cc-proxy.ps1` (Windows), `bash/cc-proxy.sh` (Linux), and `configs/*/config.yaml`.
-- When changing model names or ports, keep both `powershell/cc-proxy.ps1` and `bash/cc-proxy.sh` in sync.
+- **To change model names or ports**: edit `python/cc_proxy.py` ONLY — single source of truth. Shell wrappers delegate automatically.
+- Prefer editing `python/cc_proxy.py` for all logic changes. Shell wrappers (`bash/cc-proxy.sh`, `powershell/cc-proxy.ps1`) are thin and rarely need editing.
 - Treat `configs/*/.config.runtime.yaml` as generated artifacts and keep them untracked.
-- Treat `configs/*/.proxy.pid` as Linux runtime state and keep them untracked.
+- Treat `configs/*/.proxy.pid` as runtime state and keep them untracked.
 - Use provider base `config.yaml` as dashboard-connected runtime source of truth.
 - Do not enforce `remote-management.secret-key`; allow dashboard-managed values.
 - For new providers, copy root `config.yaml` as a template and then set provider port.
 - Treat `**/main.log` as runtime log output and keep it untracked.
 - Keep root `config.yaml` tracked as a bootstrap config for issuing new auth tokens near the binary.
-- If changing provider ports, update `CLI_PROXY_PORTS`/`CC_PROXY_PORTS` in both platform scripts; do not rely only on base `config.yaml` ports.
+- If adding new providers/ports, update `PORTS` and `PRESETS` in `python/cc_proxy.py`; add entrypoint functions to both shell wrappers.
 - `routing.strategy` is set to `round-robin` in provider configs.
 - Linux binary (`cli-proxy-api`) is gitignored; users download it separately.
 
