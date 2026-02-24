@@ -350,9 +350,13 @@ cc_proxy_auth() {
     extra_flags+=("-no-browser")
   fi
 
-  # Find a free port for the OAuth callback to avoid "address already in use" errors
+  # claude uses fixed port 54545 (matches Claude OAuth redirect_uri); others use a free port
   local free_port
-  free_port="$(_cc_proxy_find_free_auth_port 3000 3020)"
+  if [[ "$provider" == "claude" ]]; then
+    free_port=54545
+  else
+    free_port="$(_cc_proxy_find_free_auth_port 3000 3020)"
+  fi
   extra_flags+=("-oauth-callback-port" "$free_port")
 
   echo "[cc-proxy] Starting auth for provider '${provider}' (using callback port ${free_port})..."
@@ -658,7 +662,11 @@ _cc_proxy_ensure_tokens() {
   echo "[cc-proxy] Checking tokens for provider: $provider"
   for token_file in "${token_files[@]}"; do
     local expire_str email
+    # "expired" field (antigravity/claude format) or "expiry" inside "token" (gemini format)
     expire_str=$(grep -oP '"expired":\s*"\K[^"]+' "$token_file" 2>/dev/null)
+    if [[ -z "$expire_str" ]]; then
+      expire_str=$(grep -oP '"expiry":\s*"\K[^"]+' "$token_file" 2>/dev/null)
+    fi
     email=$(grep -oP '"email":\s*"\K[^"]+' "$token_file" 2>/dev/null)
     local label="${email:-$(basename "$token_file")}"
 
@@ -672,7 +680,7 @@ _cc_proxy_ensure_tokens() {
 
     if [[ -n "$expire_time" && "$expire_time" -gt "$current_time" ]]; then
       valid_tokens=$((valid_tokens + 1))
-      local remaining=$(( (expire_time - current_time) / 3600 ))
+      local remaining=$(( (expire_time - current_time + 3599) / 3600 ))
       echo "[cc-proxy]   OK    $label  (expires in ${remaining}h)"
     else
       expired_tokens=$((expired_tokens + 1))
@@ -681,13 +689,12 @@ _cc_proxy_ensure_tokens() {
   done
   echo "[cc-proxy] Result: ${valid_tokens} valid, ${expired_tokens} expired"
 
-  # If at least one token is still valid, we're good to go.
-  if [[ "$valid_tokens" -gt 0 ]]; then
+  # Strict mode: require every discovered token file to be valid.
+  if [[ "$valid_tokens" -eq "${#token_files[@]}" ]]; then
     return 0
   fi
 
-  # All tokens are expired (or couldn't be parsed). Run auth to renew.
-  echo "[cc-proxy] All tokens for $provider are expired. Running auth..."
+  echo "[cc-proxy] Some tokens for $provider are invalid or expired. Running auth..."
   cc_proxy_auth "$provider"
   return $?
 }

@@ -306,8 +306,12 @@ function Invoke-CLIProxyAuth([Parameter(Mandatory=$true)][ValidateSet("claude","
     $extraFlags += "-no-browser"
   }
 
-  # Find a free port for the OAuth callback to avoid "address already in use" errors
-  $freePort = Find-CLIProxyFreeAuthPort -StartPort 3000 -MaxPort 3020
+  # claude uses fixed port 54545 (matches Claude OAuth redirect_uri); others use a free port
+  $freePort = if ($Provider -eq "claude") {
+    54545
+  } else {
+    Find-CLIProxyFreeAuthPort -StartPort 3000 -MaxPort 3020
+  }
   $extraFlags += "-oauth-callback-port"
   $extraFlags += "$freePort"
 
@@ -509,15 +513,17 @@ function Ensure-CLIProxyTokens([Parameter(Mandatory=$true)][ValidateSet("claude"
     try {
       $json = Get-Content $file.FullName -Raw | ConvertFrom-Json
       $label = if ($json.email) { $json.email } else { $file.Name }
-      if ($null -ne $json.expired) {
-        $expireTime = [DateTimeOffset]::Parse($json.expired)
+      # "expired" field (antigravity/claude format) or "token.expiry" (gemini format)
+      $expireRaw = if ($null -ne $json.expired) { $json.expired } elseif ($null -ne $json.token -and $null -ne $json.token.expiry) { $json.token.expiry } else { $null }
+      if ($null -ne $expireRaw) {
+        $expireTime = [DateTimeOffset]::Parse($expireRaw)
         if ($expireTime -gt $currentTime) {
           $validTokens++
-          $remainingHours = [int](($expireTime - $currentTime).TotalHours)
+          $remainingHours = [int][Math]::Ceiling(($expireTime - $currentTime).TotalHours)
           Write-Host "[cc-proxy]   OK      $label  (expires in ${remainingHours}h)"
         } else {
           $expiredTokens++
-          Write-Host "[cc-proxy]   EXPIRED $label  (expired: $($json.expired))"
+          Write-Host "[cc-proxy]   EXPIRED $label  (expired: $expireRaw)"
         }
       } else {
         Write-Host "[cc-proxy]   SKIP    $label  (no expiry field)"
@@ -528,10 +534,11 @@ function Ensure-CLIProxyTokens([Parameter(Mandatory=$true)][ValidateSet("claude"
   }
   Write-Host "[cc-proxy] Result: $validTokens valid, $expiredTokens expired"
 
-  if ($validTokens -gt 0) {
+  # Strict mode: require every discovered token file to be valid.
+  if ($validTokens -eq $tokenFiles.Count) {
     return
   }
 
-  Write-Host "[cc-proxy] All tokens for $Provider are expired. Running auth..."
+  Write-Host "[cc-proxy] Some tokens for $Provider are invalid or expired. Running auth..."
   Invoke-CLIProxyAuth -Provider $Provider
 }
