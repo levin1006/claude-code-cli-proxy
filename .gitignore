@@ -13,3 +13,11 @@ configs/*/.proxy.pid
 
 # Management UI assets
 configs/*/static/
+
+# Python bytecode cache
+python/__pycache__/
+**/*.pyc
+
+# Shell script backups (one-time migration artifacts)
+bash/cc-proxy.sh.bak
+powershell/cc-proxy.ps1.bak
