@@ -405,7 +405,7 @@ function Invoke-CCProxy(
 
 # ---- Provider-specific entrypoints ----
 function cc-claude {
-  Start-CLIProxy "claude"
+  Ensure-CLIProxyTokens "claude"; Start-CLIProxy "claude"
   Invoke-CCProxy `
     "claude" `
     "claude-opus-4-6" `
@@ -414,7 +414,7 @@ function cc-claude {
 }
 
 function cc-gemini {
-  Start-CLIProxy "gemini"
+  Ensure-CLIProxyTokens "gemini"; Start-CLIProxy "gemini"
   Invoke-CCProxy `
     "gemini" `
     "gemini-3-pro-preview" `
@@ -423,7 +423,7 @@ function cc-gemini {
 }
 
 function cc-codex {
-  Start-CLIProxy "codex"
+  Ensure-CLIProxyTokens "codex"; Start-CLIProxy "codex"
   # NOTE: Parenthesis effort requires CLIProxyAPI mapping support.
   Invoke-CCProxy `
     "codex" `
@@ -433,7 +433,7 @@ function cc-codex {
 }
 
 function cc-ag-claude {
-  Start-CLIProxy "antigravity"
+  Ensure-CLIProxyTokens "antigravity"; Start-CLIProxy "antigravity"
   Invoke-CCProxy `
     "antigravity" `
     "claude-opus-4-6-thinking" `
@@ -442,7 +442,7 @@ function cc-ag-claude {
 }
 
 function cc-ag-gemini {
-  Start-CLIProxy "antigravity"
+  Ensure-CLIProxyTokens "antigravity"; Start-CLIProxy "antigravity"
   Invoke-CCProxy `
     "antigravity" `
     "gemini-3.1-pro-high" `
@@ -456,3 +456,47 @@ function cc-proxy-stop   { Stop-CLIProxy }
 function cc-proxy-auth   { Invoke-CLIProxyAuth @args }
 
 Show-CCProxyProfileSetupHint
+function Ensure-CLIProxyTokens([Parameter(Mandatory=$true)][ValidateSet("claude","gemini","codex","antigravity")][string]$Provider) {
+  $tokenDir = Join-Path $global:CLI_PROXY_BASE_DIR "configs\$Provider"
+  
+  if (-not (Test-Path $tokenDir)) {
+    Write-Host "[cc-proxy] Config directory for $Provider does not exist. Running auth..."
+    Invoke-CLIProxyAuth -Provider $Provider
+    return
+  }
+
+  $tokenFiles = Get-ChildItem -Path $tokenDir -Filter "$Provider-*.json" -File
+  if ($tokenFiles.Count -eq 0) {
+    Write-Host "[cc-proxy] No token files found for $Provider. Running auth..."
+    Invoke-CLIProxyAuth -Provider $Provider
+    return
+  }
+
+  $currentTime = [DateTimeOffset]::UtcNow
+  $validTokens = 0
+  $expiredTokens = 0
+
+  foreach ($file in $tokenFiles) {
+    try {
+      $json = Get-Content $file.FullName -Raw | ConvertFrom-Json
+      if ($null -ne $json.expired) {
+        $expireTime = [DateTimeOffset]::Parse($json.expired)
+        if ($expireTime -gt $currentTime) {
+          $validTokens++
+        } else {
+          $expiredTokens++
+          Write-Host "[cc-proxy] Token expired: $($file.Name)"
+        }
+      }
+    } catch {
+      # Ignore parse errors
+    }
+  }
+
+  if ($validTokens -gt 0) {
+    return
+  }
+
+  Write-Host "[cc-proxy] All tokens for $Provider are expired. Running auth..."
+  Invoke-CLIProxyAuth -Provider $Provider
+}

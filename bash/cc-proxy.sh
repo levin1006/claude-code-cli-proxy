@@ -480,6 +480,7 @@ _cc_proxy_invoke() {
 
 # ---- Provider-specific entrypoints ----
 cc-claude() {
+  _cc_proxy_ensure_tokens "claude" || return 1
   cc_proxy_start "claude" || return 1
   _cc_proxy_invoke \
     "claude" \
@@ -490,6 +491,7 @@ cc-claude() {
 }
 
 cc-gemini() {
+  _cc_proxy_ensure_tokens "gemini" || return 1
   cc_proxy_start "gemini" || return 1
   _cc_proxy_invoke \
     "gemini" \
@@ -500,6 +502,7 @@ cc-gemini() {
 }
 
 cc-codex() {
+  _cc_proxy_ensure_tokens "codex" || return 1
   cc_proxy_start "codex" || return 1
   # NOTE: Parenthesis effort requires CLIProxyAPI mapping support.
   _cc_proxy_invoke \
@@ -511,6 +514,7 @@ cc-codex() {
 }
 
 cc-ag-claude() {
+  _cc_proxy_ensure_tokens "antigravity" || return 1
   cc_proxy_start "antigravity" || return 1
   _cc_proxy_invoke \
     "antigravity" \
@@ -521,6 +525,7 @@ cc-ag-claude() {
 }
 
 cc-ag-gemini() {
+  _cc_proxy_ensure_tokens "antigravity" || return 1
   cc_proxy_start "antigravity" || return 1
   _cc_proxy_invoke \
     "antigravity" \
@@ -592,3 +597,66 @@ _cc_proxy_show_profile_hint() {
 
 # ---- Auto-run on source ----
 _cc_proxy_show_profile_hint
+
+# ---- Token Validation ----
+_cc_proxy_ensure_tokens() {
+  local provider="$1"
+  local token_dir="${CC_PROXY_BASE_DIR}/configs/${provider}"
+  
+  if [[ ! -d "$token_dir" ]]; then
+    echo "[cc-proxy] Config directory for $provider does not exist. Running auth..."
+    cc_proxy_auth "$provider"
+    return $?
+  fi
+
+  local current_time
+  current_time=$(date +%s)
+  local valid_tokens=0
+  local expired_tokens=0
+  local token_files=()
+
+  # Find all json token files
+  while IFS= read -r -d '' file; do
+    token_files+=("$file")
+  done < <(find "$token_dir" -maxdepth 1 -name "${provider}-*.json" -print0)
+
+  if [[ ${#token_files[@]} -eq 0 ]]; then
+    echo "[cc-proxy] No token files found for $provider. Running auth..."
+    cc_proxy_auth "$provider"
+    return $?
+  fi
+
+  # Check token validity
+  for token_file in "${token_files[@]}"; do
+    local expire_str
+    expire_str=$(grep -oP '"expired":\s*"\K[^"]+' "$token_file" 2>/dev/null)
+    
+    if [[ -z "$expire_str" ]]; then
+      # No expiration field found, assume invalid or manual config
+      continue
+    fi
+    
+    local expire_time
+    expire_time=$(date -d "$expire_str" +%s 2>/dev/null)
+    
+    if [[ -n "$expire_time" && "$expire_time" -gt "$current_time" ]]; then
+      valid_tokens=$((valid_tokens + 1))
+    else
+      expired_tokens=$((expired_tokens + 1))
+      echo "[cc-proxy] Token expired: $(basename "$token_file")"
+    fi
+  done
+
+  # If at least one token is still valid, we're good to go.
+  if [[ "$valid_tokens" -gt 0 ]]; then
+    return 0
+  fi
+
+  # All tokens are expired (or couldn't be parsed). Run auth to renew.
+  echo "[cc-proxy] All tokens for $provider are expired. Running auth..."
+  
+  # For Linux, we don't automatically open the browser during auth if NO_BROWSER is not set, 
+  # but the cc_proxy_auth command handles that fallback.
+  cc_proxy_auth "$provider"
+  return $?
+}
