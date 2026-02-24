@@ -272,29 +272,30 @@ def _parse_iso(s):
 
 
 def ensure_tokens(base_dir, provider):
-    import glob as glob_mod
-
-    token_dir = get_provider_dir(base_dir, provider)
     exe = get_binary_path(base_dir)
     login_flag = LOGIN_FLAGS[provider]
     auth_hint = "  {} -config configs/{}/config.yaml {}".format(
         exe.name, provider, login_flag)
 
-    token_files = sorted(glob_mod.glob(str(token_dir / "{}-*.json".format(provider))))
+    tokens = get_token_infos(base_dir, provider)
 
-    if not token_dir.is_dir() or not token_files:
+    if not tokens:
         print("[cc-proxy] WARNING: No token files found for '{}'.".format(provider))
-        print("[cc-proxy] If authentication is needed, run:")
+        print("[cc-proxy] To authenticate, run:")
         print("[cc-proxy] {}".format(auth_hint))
         print("[cc-proxy] Proceeding anyway...")
         return True
 
-    # Expiry is NOT checked here — proxy validates auth on each request.
-    # If a token is truly expired, the proxy will surface the error.
-    # To re-authenticate manually:
-    print("[cc-proxy] Token files found for '{}'. Proceeding.".format(provider))
-    print("[cc-proxy] If you hit auth errors, re-authenticate with:")
-    print("[cc-proxy] {}".format(auth_hint))
+    # Print token status table so user can see auth state before claude launches
+    any_expired = any("expired" in t["status"] for t in tokens)
+    print("[cc-proxy] Tokens for '{}':".format(provider))
+    for t in tokens:
+        label = t["email"] or t["file"]
+        marker = "  <-- re-auth needed" if "expired" in t["status"] else ""
+        print("[cc-proxy]   {:<40}  {}{}".format(label, t["status"], marker))
+    if any_expired:
+        print("[cc-proxy] WARNING: Some tokens are expired. To re-authenticate:")
+        print("[cc-proxy] {}".format(auth_hint))
     return True
 
 
@@ -390,6 +391,70 @@ def stop_proxy(base_dir, provider):
         print("[cc-proxy] All proxies stopped.")
 
 
+def _parse_token_expiry(expiry_str):
+    """Parse RFC3339 expiry string. Returns datetime or None."""
+    import re as _re
+    # Truncate sub-second to 6 digits for Python <3.11 compatibility
+    s = _re.sub(r'(\.\d{6})\d+', r'\1', expiry_str)
+    # Python 3.8-3.10: fromisoformat doesn't support timezone offset '+HH:MM'
+    # Replace '+HH:MM' or '-HH:MM' suffix with UTC offset calculation
+    try:
+        from datetime import datetime, timezone, timedelta
+        m = _re.match(r'(.+?)([+-])(\d{2}):(\d{2})$', s)
+        if m:
+            dt_str, sign, hh, mm = m.group(1), m.group(2), int(m.group(3)), int(m.group(4))
+            offset = timedelta(hours=hh, minutes=mm)
+            if sign == '-':
+                offset = -offset
+            dt = datetime.fromisoformat(dt_str).replace(tzinfo=timezone(offset))
+        else:
+            dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def get_token_infos(base_dir, provider):
+    """Return list of dicts with token file info for a provider."""
+    import glob as _glob, json as _json
+    from datetime import datetime, timezone
+    token_dir = get_provider_dir(base_dir, provider)
+    files = sorted(_glob.glob(str(token_dir / "{}-*.json".format(provider))))
+    results = []
+    now = datetime.now(timezone.utc)
+    for fpath in files:
+        info = {"file": Path(fpath).name, "email": None, "status": "unknown", "expiry": None}
+        try:
+            with open(fpath) as f:
+                data = _json.load(f)
+            info["email"] = data.get("email")
+            if data.get("disabled"):
+                info["status"] = "disabled"
+            else:
+                # Both formats use a timestamp string for expiry:
+                # - claude/antigravity/codex: top-level "expired" field (timestamp str)
+                # - gemini: "token.expiry" field (timestamp str)
+                expiry_str = data.get("expired") or data.get("token", {}).get("expiry")
+                if expiry_str:
+                    exp = _parse_token_expiry(expiry_str)
+                    info["expiry"] = exp
+                    if exp is None:
+                        info["status"] = "unknown"
+                    elif exp < now:
+                        info["status"] = "expired"
+                    else:
+                        mins = int((exp - now).total_seconds() / 60)
+                        info["status"] = "ok (expires in {}m)".format(mins) if mins < 120 else "ok"
+                else:
+                    info["status"] = "ok"
+        except Exception as e:
+            info["status"] = "error ({})".format(e)
+        results.append(info)
+    return results
+
+
 def get_status(base_dir, provider):
     pid = read_pid(base_dir, provider)
     if not pid:
@@ -399,12 +464,14 @@ def get_status(base_dir, provider):
 
     running = bool(pid and is_pid_alive(pid))
     healthy = check_health(provider) if running else False
+    tokens = get_token_infos(base_dir, provider)
     return {
         "provider": provider,
         "running": running,
         "pid": pid if running else None,
         "healthy": healthy,
         "url": "http://{}:{}".format(HOST, PORTS[provider]),
+        "tokens": tokens,
     }
 
 
@@ -446,6 +513,8 @@ def invoke_claude(provider, opus, sonnet, haiku, claude_args):
     env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = haiku
 
     claude_bin = shutil.which("claude") or "claude"
+    sys.stdout.flush()
+    sys.stderr.flush()
     result = subprocess.run([claude_bin] + claude_args, env=env)
     return result.returncode
 
@@ -632,6 +701,14 @@ def main():
             healthy_str = str(s["healthy"])
             print("  {:<14}  {:<8}  PID={:<7}  Healthy={:<5}  {}".format(
                 pvd, running_str, pid_str, healthy_str, s["url"]))
+            if s["tokens"]:
+                for t in s["tokens"]:
+                    label = t["email"] or t["file"]
+                    status = t["status"]
+                    marker = "  [expired]" if "expired" in status else ""
+                    print("    Token: {:<40}  {}{}".format(label, status, marker))
+            else:
+                print("    Token: (none — run: cc-proxy-auth {})".format(pvd))
         return 0
 
     elif cmd == "auth":
