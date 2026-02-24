@@ -4,7 +4,28 @@
       "mcp__plugin_serena_serena__activate_project",
       "Bash(pwsh:*)",
       "Bash(powershell.exe:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(curl:*)",
+      "Bash(source:*)",
+      "Bash(ls:*)",
+      "Bash(ss:*)",
+      "Bash(bash:*)",
+      "Bash(head:*)",
+      "Bash(env:*)",
+      "Bash(./cli-proxy-api.exe:*)",
+      "Bash(rm:*)",
+      "Bash(cat:*)",
+      "Bash(iconv:*)",
+      "Bash(which claude:*)",
+      "mcp__plugin_serena_serena__list_memories",
+      "mcp__plugin_serena_serena__check_onboarding_performed",
+      "mcp__plugin_serena_serena__get_symbols_overview",
+      "mcp__plugin_serena_serena__find_symbol",
+      "mcp__plugin_serena_serena__replace_symbol_body",
+      "mcp__plugin_serena_serena__list_dir",
+      "WebFetch(domain:help.router-for.me)"
     ]
   }
 }
