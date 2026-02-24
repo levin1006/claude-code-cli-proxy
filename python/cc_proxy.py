@@ -484,7 +484,7 @@ def invoke_claude(provider, opus, sonnet, haiku, claude_args):
     env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = sonnet
     env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = haiku
 
-    claude_bin = shutil.which("cc-ag-claude") or "cc-ag-claude"
+    claude_bin = shutil.which("claude") or "claude"
     result = subprocess.run([claude_bin] + claude_args, env=env)
     return result.returncode
 
@@ -707,7 +707,7 @@ def main():
                     "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
                     "ANTHROPIC_DEFAULT_HAIKU_MODEL"):
             env.pop(key, None)
-        claude_bin = shutil.which("cc-ag-claude") or "cc-ag-claude"
+        claude_bin = shutil.which("claude") or "claude"
         result = subprocess.run([claude_bin] + claude_args, env=env)
         return result.returncode
 
