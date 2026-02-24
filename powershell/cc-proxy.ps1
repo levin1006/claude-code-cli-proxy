@@ -483,7 +483,24 @@ function Set-CLIProxySecret {
   }
 
   Write-Host "[cc-proxy] Secret key set to '$Secret' in $updated file(s)."
-  Write-Host "[cc-proxy] Restart the proxy (cc-proxy-stop; cc-<provider>) to apply."
+
+  # Restart only running providers so the new secret key is applied immediately.
+  $restarted = 0
+  foreach ($pvd in $global:CLI_PROXY_PROVIDERS) {
+    $pid = Resolve-CLIProxyPidByPort -Provider $pvd
+    if ($pid) {
+      Write-Host "[cc-proxy] Restarting provider: $pvd"
+      Stop-CLIProxy -Provider $pvd
+      Start-CLIProxy -Provider $pvd
+      $restarted++
+    }
+  }
+
+  if ($restarted -eq 0) {
+    Write-Host "[cc-proxy] No running providers found. Run cc-<provider> when needed."
+  } else {
+    Write-Host "[cc-proxy] Restarted $restarted running provider(s)."
+  }
 }
 function cc-proxy-set-secret { Set-CLIProxySecret @args }
 

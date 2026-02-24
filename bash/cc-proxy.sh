@@ -569,7 +569,27 @@ cc-proxy-set-secret() {
   done
 
   echo "[cc-proxy] Secret key set to '${new_secret}' in ${updated} file(s)."
-  echo "[cc-proxy] Restart the proxy (cc-proxy-stop && cc-<provider>) to apply."
+
+  # Restart only running providers so the new secret key is applied immediately.
+  local restarted=0
+  local pvd
+  for pvd in "${CC_PROXY_PROVIDERS[@]}"; do
+    if [[ -n "$(_cc_proxy_resolve_pid_by_port "$pvd")" ]]; then
+      echo "[cc-proxy] Restarting provider: ${pvd}"
+      cc_proxy_stop "$pvd"
+      if cc_proxy_start "$pvd"; then
+        restarted=$((restarted + 1))
+      else
+        echo "[cc-proxy] Failed to restart provider: ${pvd}" >&2
+      fi
+    fi
+  done
+
+  if [[ "$restarted" -eq 0 ]]; then
+    echo "[cc-proxy] No running providers found. Run cc-<provider> when needed."
+  else
+    echo "[cc-proxy] Restarted ${restarted} running provider(s)."
+  fi
 }
 
 # ---- Profile bootstrap ----
