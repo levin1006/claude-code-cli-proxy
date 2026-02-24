@@ -5,7 +5,9 @@
 # Auto-detect base dir (fixes hardcoded D:\OneDrive\... path bug)
 $global:CLI_PROXY_BASE_DIR = Split-Path -Parent $PSScriptRoot
 
-$script:_CC_PROXY_PY     = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } else { "python" }
+$script:_CC_PROXY_PY     = if (Get-Command py      -ErrorAction SilentlyContinue) { "py"      } `
+                          elseif (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } `
+                          else { "python" }
 $script:_CC_PROXY_SCRIPT = Join-Path $global:CLI_PROXY_BASE_DIR "python\cc_proxy.py"
 
 function _cc_proxy { & $script:_CC_PROXY_PY $script:_CC_PROXY_SCRIPT @args }
