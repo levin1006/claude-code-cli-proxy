@@ -21,7 +21,8 @@ Windows 버전과 동일한 개념이지만 실행 환경이 다르다.
 **핵심 원리는 동일**:
 1. provider별 고정 포트(18417~18420)
 2. `configs/<provider>/` 작업 디렉터리 분리 + `auth-dir: "./"`
-3. `cc-<provider>` 함수가 start-if-needed / healthy-reuse 후 `claude` 실행
+3. 기본 우선순위는 `antigravity → claude → codex → gemini`
+4. `cc-<provider>` 함수가 start-if-needed / healthy-reuse 후 `claude` 실행
 
 ---
 
@@ -119,11 +120,11 @@ cc
 ### 4.2 Provider별 프록시 경유
 
 ```bash
-cc-claude          # Claude provider (포트 18417)
-cc-gemini          # Gemini provider (포트 18418)
+cc-ag-claude       # Antigravity provider, Claude 모델 세트 (포트 18417)
+cc-claude          # Claude provider (포트 18418)
 cc-codex           # Codex provider  (포트 18419)
-cc-ag-claude       # Antigravity provider, Claude 모델 세트 (포트 18420)
-cc-ag-gemini       # Antigravity provider, Gemini 모델 세트 (포트 18420)
+cc-gemini          # Gemini provider (포트 18420)
+cc-ag-gemini       # Antigravity provider, Gemini 모델 세트 (포트 18417)
 ```
 
 각 명령은:
@@ -153,19 +154,19 @@ Windows와 동일한 `auth-dir: "./"` 전략을 사용한다.
 ## 6. 헬스체크
 
 ```bash
-# Claude provider
+# Antigravity provider
 curl -fsS http://127.0.0.1:18417/
-curl http://127.0.0.1:18417/v1/models
 
-# Gemini provider
+# Claude provider
 curl -fsS http://127.0.0.1:18418/
 curl http://127.0.0.1:18418/v1/models
 
 # Codex provider
 curl -fsS http://127.0.0.1:18419/
 
-# Antigravity provider
+# Gemini provider
 curl -fsS http://127.0.0.1:18420/
+curl http://127.0.0.1:18420/v1/models
 ```
 
 ### Management UI
@@ -190,7 +191,7 @@ chmod +x ~/claude-code-cli-proxy/cli-proxy-api
 ### 포트 충돌
 
 ```bash
-# 해당 포트를 사용하는 프로세스 확인
+# 해당 포트를 사용하는 프로세스 확인 (예: antigravity 포트 18417)
 ss -tlnp sport = :18417
 # 또는
 lsof -iTCP:18417 -sTCP:LISTEN

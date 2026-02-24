@@ -77,10 +77,10 @@ CLIProxyAPI_6.8.24_windows_amd64/
 ### 2.2 한 PC에서 여러 인스턴스를 동시에 띄울 수 있나?
 현재 구조는 provider별로 **고정 포트**를 사용하므로 동시 실행이 가능하다.
 
-- `claude`: `18417`
-- `gemini`: `18418`
+- `antigravity`: `18417`
+- `claude`: `18418`
 - `codex`: `18419`
-- `antigravity`: `18420`
+- `gemini`: `18420`
 
 `cc-*` 함수는 같은 provider 포트에 이미 healthy proxy가 있으면 **재시작하지 않고 재사용**한다.
 즉, 대시보드 사용 기록을 provider 단위로 이어서 관찰하려면 자동 재시작 없이 같은 프로세스를 유지하면 된다.
@@ -172,7 +172,7 @@ Management Center에서는 다음을 확인할 수 있다.
 아래 스크립트는 다음을 제공한다.
 
 - `cc` : 순정 Claude Code 실행(프록시 관련 env 제거)
-- `cc-claude / cc-gemini / cc-codex / cc-ag-claude / cc-ag-gemini` : provider 전용 CLIProxyAPI를 start-if-needed/healthy-reuse로 사용 + 모델 매핑 후 Claude Code 실행
+- `cc-ag-claude / cc-claude / cc-codex / cc-gemini / cc-ag-gemini` : provider 전용 CLIProxyAPI를 start-if-needed/healthy-reuse로 사용 + 모델 매핑 후 Claude Code 실행
 - `cc-proxy-status` : 프록시 상태 확인
 - `cc-proxy-stop` : 프록시 종료
 - 프록시 health check 성공 시 Management UI 자동 오픈(세션당 1회)
@@ -355,14 +355,14 @@ function cc-proxy-stop   { Stop-CLIProxy }
 cc
 ```
 
-### 8.2 Claude provider만 사용(Claude 토큰들끼리 라운드로빈)
+### 8.2 Antigravity provider 사용 (Claude 계열 세트)
 ```powershell
-cc-claude
+cc-ag-claude
 ```
 
-### 8.3 Gemini provider만 사용
+### 8.3 Claude provider만 사용(Claude 토큰들끼리 라운드로빈)
 ```powershell
-cc-gemini
+cc-claude
 ```
 
 ### 8.4 Codex(OpenAI) provider만 사용
@@ -370,9 +370,9 @@ cc-gemini
 cc-codex
 ```
 
-### 8.5 Antigravity provider 사용 (Claude 계열 세트)
+### 8.5 Gemini provider만 사용
 ```powershell
-cc-ag-claude
+cc-gemini
 ```
 
 ### 8.6 Antigravity provider 사용 (Gemini 계열 세트)

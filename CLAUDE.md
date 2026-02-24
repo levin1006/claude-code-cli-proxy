@@ -64,10 +64,10 @@ Shell wrappers (thin)             Python core (shared)
 
 ### Port model in this repo
 Defined in `python/cc_proxy.py` (single source of truth, synced to both shell wrappers):
-- `claude`: `18417`
-- `gemini`: `18418`
+- `antigravity`: `18417`
+- `claude`: `18418`
 - `codex`: `18419`
-- `antigravity`: `18420`
+- `gemini`: `18420`
 
 ## Common commands
 > If your shell profile already loads these functions, use commands directly.

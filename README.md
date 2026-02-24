@@ -74,10 +74,10 @@ cc_proxy_install_profile
 
 ```
 cc                 # Native Claude Code (proxy env 제거)
-cc-claude          # Claude provider proxy 경유 (기동 필요 시 시작, 실행 중이면 재사용)
-cc-gemini          # Gemini provider proxy 경유 (기동 필요 시 시작, 실행 중이면 재사용)
-cc-codex           # Codex provider proxy 경유 (기동 필요 시 시작, 실행 중이면 재사용)
 cc-ag-claude       # Antigravity provider proxy 경유 (Claude 계열 모델 세트)
+cc-claude          # Claude provider proxy 경유 (기동 필요 시 시작, 실행 중이면 재사용)
+cc-codex           # Codex provider proxy 경유 (기동 필요 시 시작, 실행 중이면 재사용)
+cc-gemini          # Gemini provider proxy 경유 (기동 필요 시 시작, 실행 중이면 재사용)
 cc-ag-gemini       # Antigravity provider proxy 경유 (Gemini 계열 모델 세트)
 
 cc-proxy-status    # proxy 상태 확인
@@ -88,16 +88,16 @@ cc-proxy-stop      # proxy 중지(명시적으로 종료할 때만 사용)
 
 `powershell/cc-proxy.ps1` 및 `bash/cc-proxy.sh` 기준:
 
-- claude: `18417`
-- gemini: `18418`
+- antigravity: `18417`
+- claude: `18418`
 - codex: `18419`
-- antigravity: `18420`
+- gemini: `18420`
 
 헬스/모델 확인 예시 (Linux에서는 `curl`, Windows에서는 `curl.exe`):
 
 ```
-curl -fsS http://127.0.0.1:18417/
-curl http://127.0.0.1:18417/v1/models
+curl -fsS http://127.0.0.1:18418/
+curl http://127.0.0.1:18418/v1/models
 ```
 
 ## 참고 링크

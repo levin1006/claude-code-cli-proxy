@@ -18,10 +18,10 @@ cc() {
 }
 
 # Provider entrypoints
-cc-claude()     { _cc_proxy run claude    -- "$@"; }
-cc-gemini()     { _cc_proxy run gemini    -- "$@"; }
-cc-codex()      { _cc_proxy run codex     -- "$@"; }
 cc-ag-claude()  { _cc_proxy run ag-claude -- "$@"; }
+cc-claude()     { _cc_proxy run claude    -- "$@"; }
+cc-codex()      { _cc_proxy run codex     -- "$@"; }
+cc-gemini()     { _cc_proxy run gemini    -- "$@"; }
 cc-ag-gemini()  { _cc_proxy run ag-gemini -- "$@"; }
 
 # Management

@@ -30,30 +30,30 @@ from datetime import datetime, timezone
 
 IS_WINDOWS = sys.platform == "win32"
 
-PROVIDERS = ("claude", "gemini", "codex", "antigravity")
+PROVIDERS = ("antigravity", "claude", "codex", "gemini")
 
 PORTS = {
-    "claude":      18417,
-    "gemini":      18418,
+    "antigravity": 18417,
+    "claude":      18418,
     "codex":       18419,
-    "antigravity": 18420,
+    "gemini":      18420,
 }
 
 HOST = "127.0.0.1"
 
 PRESETS = {
-    "claude":    ("claude",       "claude-opus-4-6",           "claude-sonnet-4-6",       "claude-haiku-4-5-20251001"),
-    "gemini":    ("gemini",       "gemini-3-pro-preview",      "gemini-3-flash-preview",  "gemini-2.5-flash-lite"),
-    "codex":     ("codex",        "gpt-5.3-codex(xhigh)",      "gpt-5.3-codex(high)",     "gpt-5.3-codex-spark"),
     "ag-claude": ("antigravity",  "claude-opus-4-6-thinking",  "claude-sonnet-4-6",       "claude-sonnet-4-6"),
     "ag-gemini": ("antigravity",  "gemini-3.1-pro-high",       "gemini-3.1-pro-low",      "gemini-3-flash"),
+    "claude":    ("claude",       "claude-opus-4-6",           "claude-sonnet-4-6",       "claude-haiku-4-5-20251001"),
+    "codex":     ("codex",        "gpt-5.3-codex(xhigh)",      "gpt-5.3-codex(high)",     "gpt-5.3-codex-spark"),
+    "gemini":    ("gemini",       "gemini-3-pro-preview",      "gemini-3-flash-preview",  "gemini-2.5-flash-lite"),
 }
 
 LOGIN_FLAGS = {
-    "claude":      "-claude-login",
-    "gemini":      "-login",
-    "codex":       "-codex-login",
     "antigravity": "-antigravity-login",
+    "claude":      "-claude-login",
+    "codex":       "-codex-login",
+    "gemini":      "-login",
 }
 
 
