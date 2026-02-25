@@ -10,23 +10,49 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 
 ## 구성 요소
 
-- `cli-proxy-api.exe` (Windows binary, `CLIProxyAPI_6.8.24_windows_amd64`)
-- `cli-proxy-api` (Linux binary, 별도 다운로드)
+단일 명령어 설치를 완료하면 `~/.cli-proxy/` 디렉토리 아래에 다음 파일들이 자동으로 구성됩니다:
+
+- `cli-proxy-api.exe` (Windows) 또는 `cli-proxy-api` (Linux/macOS) 바이너리
 - `powershell/cc-proxy.ps1` (Windows helper functions)
-- `bash/cc-proxy.sh` (Linux helper functions)
+- `bash/cc-proxy.sh` (Linux/macOS helper functions)
+- `python/cc_proxy.py` (핵심 로직을 처리하는 공통 파이썬 스크립트)
 - `configs/<provider>/config.yaml` (+ credential JSON)
 - `docs/claude-code-cliproxy-windows-guide.md` (Windows 운영 가이드)
 - `docs/claude-code-cliproxy-linux-guide.md` (Linux 운영 가이드)
-- `config.yaml` (루트 샘플/운영용 기본 설정: 신규 인증 토큰 발급 및 초기 설정 부트스트랩 용도)
+- `config.yaml` (루트 샘플/운영용 기본 설정)
 
-## 빠른 시작
+## 빠른 시작 (단일 명령어 자동 설치)
+
+저장소를 클론할 필요 없이 터미널에 명령어 한 줄을 복사하여 붙여넣으면 설치가 완료됩니다. 설치 시 `~/.cli-proxy` 디렉토리에 필요한 모든 파일과 바이너리가 구성됩니다.
+
+### Windows (PowerShell)
+
+관리자 권한 없이 일반 PowerShell에서 실행 가능합니다.
+
+```powershell
+irm https://raw.githubusercontent.com/yolandalalala/claude-code-cli-proxy/main/install.ps1 | iex
+```
+
+설치 후 안내되는 명령어(`Install-CCProxyProfile`)를 실행하면 `$PROFILE`에 자동 등록되어 다음 세션부터 바로 사용할 수 있습니다.
+
+### Linux / macOS (Bash)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yolandalalala/claude-code-cli-proxy/main/install.sh | bash
+```
+
+설치 시 `~/.bashrc` 및 `~/.zshrc`에 자동으로 `source` 구문이 추가되므로, 터미널을 재시작하거나 `source ~/.cli-proxy/bash/cc-proxy.sh`를 실행하면 즉시 적용됩니다.
+
+---
+
+## 수동 설치 및 기존 방식 (참고용)
 
 ### Windows (PowerShell)
 
 #### 1) 1회 로드
 
 ```powershell
-. "D:\OneDrive\Tool\Productivity\claude-code-cli-proxy\powershell\cc-proxy.ps1"
+. "~\.cli-proxy\powershell\cc-proxy.ps1"
 ```
 
 최초 실행 시 프로필 등록 여부를 Y/N으로 묻습니다.
@@ -41,28 +67,17 @@ Install-CCProxyProfile
 
 등록 후 현재 세션에도 즉시 반영됩니다.
 
-### Linux (Ubuntu)
+### Linux / macOS (Bash)
 
-#### 1) 바이너리 다운로드
-
-```bash
-cd ~/claude-code-cli-proxy
-wget -qO- "https://github.com/router-for-me/CLIProxyAPI/releases/download/v6.8.26/CLIProxyAPI_6.8.26_linux_amd64.tar.gz" \
-  | tar xz
-chmod +x cli-proxy-api
-```
-
-> 새 버전이 나오면 [GitHub Releases](https://github.com/router-for-me/CLIProxyAPI/releases) 페이지에서 최신 URL을 확인합니다.
-
-#### 2) 1회 로드
+#### 1) 1회 로드
 
 ```bash
-source ~/claude-code-cli-proxy/bash/cc-proxy.sh
+source ~/.cli-proxy/bash/cc-proxy.sh
 ```
 
 처음 source 시 프로필 등록 여부를 Y/N으로 묻습니다.
 
-#### 3) 프로필 등록(자동 로드)
+#### 2) 프로필 등록(자동 로드)
 
 ```bash
 cc_proxy_install_profile
