@@ -60,7 +60,6 @@ def download_and_extract_binary():
     machine = platform.machine().lower()
 
     if system == "windows":
-        # The Windows binary is tracked in the repository as "cli-proxy-api.exe"
         filename = "cli-proxy-api.exe"
         url = f"{REPO_RAW_URL}/{filename}"
         target_path = INSTALL_DIR / "cli-proxy-api.exe"
