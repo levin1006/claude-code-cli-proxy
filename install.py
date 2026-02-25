@@ -9,7 +9,7 @@ from pathlib import Path
 
 # --- Configuration ---
 MIN_PYTHON_VERSION = (3, 8)
-REPO_RAW_URL = "https://raw.githubusercontent.com/yolandalalala/claude-code-cli-proxy/main"
+REPO_RAW_URL = "https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main"
 VERSION = "6.8.24"
 
 INSTALL_DIR = Path.home() / ".cli-proxy"

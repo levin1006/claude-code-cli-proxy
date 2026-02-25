@@ -30,7 +30,7 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 관리자 권한 없이 일반 PowerShell에서 실행 가능합니다.
 
 ```powershell
-irm https://raw.githubusercontent.com/yolandalalala/claude-code-cli-proxy/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.ps1 | iex
 ```
 
 설치 후 안내되는 명령어(`Install-CCProxyProfile`)를 실행하면 `$PROFILE`에 자동 등록되어 다음 세션부터 바로 사용할 수 있습니다.
@@ -38,7 +38,7 @@ irm https://raw.githubusercontent.com/yolandalalala/claude-code-cli-proxy/main/i
 ### Linux / macOS (Bash)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yolandalalala/claude-code-cli-proxy/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.sh | bash
 ```
 
 설치 시 `~/.bashrc` 및 `~/.zshrc`에 자동으로 `source` 구문이 추가되므로, 터미널을 재시작하거나 `source ~/.cli-proxy/bash/cc-proxy.sh`를 실행하면 즉시 적용됩니다.

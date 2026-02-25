@@ -15,7 +15,7 @@ try {
 }
 
 # Configuration
-$RAW_URL = "https://raw.githubusercontent.com/yolandalalala/claude-code-cli-proxy/main/install.py"
+$RAW_URL = "https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.py"
 $TEMP_SCRIPT = "$env:TEMP\install_cc_proxy.py"
 
 # Download Python installer
