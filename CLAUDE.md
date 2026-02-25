@@ -118,13 +118,17 @@ cc-ag-claude
 cc-ag-gemini
 ```
 
-### Proxy status and stop (both platforms)
+### Proxy start, status, links, and stop (both platforms)
 ```
+cc-proxy-start-all
 cc-proxy-status
+cc-proxy-links [provider]
 cc-proxy-stop
 ```
 `cc-*` commands do not force-stop a healthy running provider proxy; they reuse it and only start if needed.
+Use `cc-proxy-start-all` to launch all proxies in the background at once (useful for monitoring).
 Use `cc-proxy-stop` when you want an explicit shutdown.
+Use `cc-proxy-links` to print management URLs and the generated combined dashboard `http://` link.
 
 ### Health/model checks (single-provider smoke test)
 Use `curl` (on Linux) or `curl.exe` (on Windows, not PowerShell `curl` alias):

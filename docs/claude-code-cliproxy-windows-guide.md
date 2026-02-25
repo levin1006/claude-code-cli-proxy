@@ -174,8 +174,9 @@ Management Center에서는 다음을 확인할 수 있다.
 - `cc` : 순정 Claude Code 실행(프록시 관련 env 제거)
 - `cc-ag-claude / cc-claude / cc-codex / cc-gemini / cc-ag-gemini` : provider 전용 CLIProxyAPI를 start-if-needed/healthy-reuse로 사용 + 모델 매핑 후 Claude Code 실행
 - `cc-proxy-status` : 프록시 상태 확인
+- `cc-proxy-links [provider]` : provider 링크/통합 dashboard 링크 출력
 - `cc-proxy-stop` : 프록시 종료
-- 프록시 health check 성공 시 Management UI 자동 오픈(세션당 1회)
+- Management UI는 자동 오픈하지 않고 링크 기반으로 접근
 
 > 경로는 자신의 설치 위치에 맞게 `$CLI_PROXY_BASE_DIR`만 수정하면 된다.
 
@@ -380,11 +381,18 @@ cc-gemini
 cc-ag-gemini
 ```
 
-### 8.7 프록시 상태 확인/종료
+### 8.7 프록시 상태/링크 확인 및 전체 제어
 ```powershell
-cc-proxy-status
-cc-proxy-stop
+cc-proxy-start-all        # 모든 프록시를 백그라운드로 구동 (모니터링용)
+cc-proxy-status           # 모든 프록시 실행/health 상태 확인
+cc-proxy-links            # 전체 provider management 링크 + 통합 dashboard(http://...) 링크
+cc-proxy-links claude     # 특정 provider 링크
+cc-proxy-stop             # 모든 프록시 및 대시보드 서버 종료
 ```
+
+통합 dashboard는 4개 provider를 2x2 iframe으로 표시한다.
+브라우저/서버 정책(X-Frame-Options/CSP)으로 iframe이 차단되면,
+패널의 직접 링크(Open directly)로 개별 dashboard 탭을 열어 사용한다.
 
 ---
 
@@ -448,7 +456,7 @@ A) 가능은 하지만 권장하지 않는다. 동기화/충돌/보안 위험이
 - configs/provider 폴더 분리 + auth-dir "./" 전략으로 완전 분리 달성
 - PowerShell 프로필: env 원복 + 프록시 재시작 + 헬스체크 자동화
 - 헬스체크를 `curl.exe + $LASTEXITCODE` 기반으로 개선 (PS 5.x 보안 프롬프트 회피)
-- Management UI 자동 오픈(세션당 1회) 추가
+- Management UI 접근을 링크 중심으로 전환(`cc-proxy-links`, 통합 dashboard 제공)
 
 ---
 

@@ -132,11 +132,13 @@ cc-ag-gemini       # Antigravity provider, Gemini 모델 세트 (포트 18417)
 2. 실행 중이지 않으면 자동 시작
 3. 헬스체크 후 `claude` 실행
 
-### 4.3 프록시 상태 확인 / 종료
+### 4.3 프록시 전체 제어 / 링크 확인
 
 ```bash
-cc-proxy-status    # 전체 provider 상태 표시
-cc-proxy-stop      # 전체 프록시 종료
+cc-proxy-start-all          # 전체 프록시 구동 (모니터링 목적 등)
+cc-proxy-status             # 전체 provider 상태 표시
+cc-proxy-links [provider]   # management 링크 출력 (provider 생략 시 전체)
+cc-proxy-stop               # 전체 프록시 및 대시보드 서버 종료
 ```
 
 ---
@@ -175,8 +177,19 @@ curl http://127.0.0.1:18420/v1/models
 http://127.0.0.1:<provider-port>/management.html
 ```
 
-`cc-<provider>` 실행 시 자동으로 브라우저가 열린다(세션당 1회).
-Headless 서버에서는 `CC_PROXY_MANAGEMENT_AUTO_OPEN=false`로 비활성화할 수 있다.
+브라우저는 자동으로 열리지 않는다. 링크 기반으로만 접근한다.
+
+```bash
+# 전체 provider 링크 + 통합 dashboard(http://...) 링크 출력
+cc-proxy-links
+
+# 특정 provider 링크만 출력
+cc-proxy-links claude
+```
+
+통합 dashboard는 4개 provider를 2x2 iframe으로 보여준다.
+일부 환경에서는 X-Frame-Options/CSP 정책으로 iframe 임베딩이 차단될 수 있으므로,
+해당 패널의 직접 링크(Open directly)로 개별 탭 접근을 사용한다.
 
 ---
 
@@ -211,13 +224,9 @@ cc-proxy-stop
 
 ### Headless 서버 (GUI 없음)
 
-`xdg-open`이 없는 환경에서는 Management UI URL이 터미널에 출력된다.
-자동 오픈을 끄려면 source 전에 설정:
-
-```bash
-export CC_PROXY_MANAGEMENT_AUTO_OPEN=false
-source ~/claude-code-cli-proxy/bash/cc-proxy.sh
-```
+자동 브라우저 오픈을 사용하지 않으므로 GUI 의존 이슈가 줄어든다.
+`cc-proxy-links`로 출력된 URL 또는 `http://` 통합 dashboard 링크를
+접속 가능한 클라이언트 브라우저에서 수동으로 열어 사용하면 된다.
 
 ### claude CLI를 찾을 수 없음
 
