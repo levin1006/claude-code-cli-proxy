@@ -30,7 +30,9 @@ function cc-gemini     { _cc_proxy run gemini    -- @args }
 function cc-ag-gemini  { _cc_proxy run ag-gemini -- @args }
 
 # Management
+function cc-proxy-start-all  { _cc_proxy start      all }
 function cc-proxy-status     { _cc_proxy status     @args }
+function cc-proxy-links      { _cc_proxy links      @args }
 function cc-proxy-stop       { _cc_proxy stop       @args }
 function cc-proxy-auth       { _cc_proxy auth       @args }
 function cc-proxy-set-secret { _cc_proxy set-secret @args }
