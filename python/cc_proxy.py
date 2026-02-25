@@ -719,7 +719,21 @@ def main():
         if provider not in PROVIDERS:
             print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
             return 1
-        return 0 if run_auth(base_dir, provider) else 1
+
+        was_running = bool(resolve_pid_by_port(PORTS[provider]))
+        if not run_auth(base_dir, provider):
+            return 1
+
+        if not was_running:
+            print("[cc-proxy] {} proxy is not running. Auto-restart skipped.".format(provider))
+            return 0
+
+        print("[cc-proxy] Restarting {} proxy to reload tokens...".format(provider))
+        stop_proxy(base_dir, provider)
+        if not start_proxy(base_dir, provider):
+            print("[cc-proxy] Failed to restart {} after auth.".format(provider), file=sys.stderr)
+            return 1
+        return 0
 
     elif cmd == "set-secret":
         if len(args) < 2:
