@@ -61,7 +61,8 @@ def download_and_extract_binary():
 
     if system == "windows":
         filename = f"CLIProxyAPI_{VERSION}_windows_amd64.exe"
-        url = f"{REPO_RAW_URL}/{filename}"
+        # Download from official releases instead of raw repo content (which is gitignored)
+        url = f"https://github.com/router-for-me/CLIProxyAPI/releases/download/v{VERSION}/{filename}"
         target_path = INSTALL_DIR / "cli-proxy-api.exe"
         download_file(url, target_path)
     else:
