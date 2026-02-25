@@ -25,7 +25,11 @@
       "mcp__plugin_serena_serena__find_symbol",
       "mcp__plugin_serena_serena__replace_symbol_body",
       "mcp__plugin_serena_serena__list_dir",
-      "WebFetch(domain:help.router-for.me)"
+      "WebFetch(domain:help.router-for.me)",
+      "Bash(py:*)",
+      "mcp__plugin_serena_serena__execute_shell_command",
+      "mcp__plugin_serena_serena__initial_instructions",
+      "WebFetch(domain:code.visualstudio.com)"
     ]
   }
 }
