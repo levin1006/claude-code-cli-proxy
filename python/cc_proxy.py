@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import tempfile
 import json
+import base64
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -210,8 +211,26 @@ def check_health(provider):
         return False
 
 
+def is_ssh_session():
+    return bool(os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"))
+
+
+def get_local_port_offset():
+    raw = os.environ.get("CC_PROXY_LOCAL_PORT_OFFSET", "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            return 0
+    return 10000 if is_ssh_session() else 0
+
+
+def get_management_port(provider):
+    return PORTS[provider] + get_local_port_offset()
+
+
 def get_management_url(provider):
-    return "http://{}:{}/management.html#/quota".format(HOST, PORTS[provider])
+    return "http://{}:{}/management.html#/quota".format(HOST, get_management_port(provider))
 
 
 def get_dashboard_file_path():
@@ -322,6 +341,27 @@ def _start_dashboard_server(dashboard_path):
     return port
 
 
+def get_dashboard_data_url():
+    sections = []
+    for provider in PROVIDERS:
+        url = get_management_url(provider)
+        sections.append(
+            '<section style="margin:8px 0;padding:8px;border:1px solid #bbb;border-radius:8px;">'
+            '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">'
+            '<strong>{}</strong><a href="{}" target="_blank" rel="noopener noreferrer">Open directly</a>'
+            '</div><iframe src="{}" style="width:100%;height:42vh;border:0;margin-top:8px;"></iframe></section>'
+            .format(provider, url, url)
+        )
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8' />"
+        "<meta name='viewport' content='width=device-width, initial-scale=1' />"
+        "<title>CC Proxy Management Dashboards</title></head><body>"
+        "<h2>CC Proxy management dashboards</h2>{}</body></html>"
+    ).format("".join(sections))
+    encoded = base64.b64encode(html.encode("utf-8")).decode("ascii")
+    return "data:text/html;base64,{}".format(encoded)
+
+
 def get_dashboard_http_url():
     dashboard_path = get_dashboard_file_path()
     state = _read_dashboard_server_state()
@@ -334,6 +374,9 @@ def get_dashboard_http_url():
     if port:
         return "http://{}:{}/{}".format(HOST, int(port), dashboard_path.name)
 
+    if is_ssh_session():
+        return get_dashboard_data_url()
+
     return dashboard_path.resolve().as_uri()
 
 
@@ -341,7 +384,7 @@ def render_dashboard_html():
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     panels = []
     for provider in PROVIDERS:
-        port = PORTS[provider]
+        port = get_management_port(provider)
         url = get_management_url(provider)
         panels.append(
             """    <section class=\"panel\">
