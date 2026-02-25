@@ -14,8 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `python/cc_proxy.py` (cross-platform core logic — single source of truth)
   - `powershell/cc-proxy.ps1` (Windows thin wrapper, ~50 lines, delegates to Python core)
   - `bash/cc-proxy.sh` (Linux thin wrapper, ~50 lines, delegates to Python core)
-  - `docs/claude-code-cliproxy-windows-guide.md` (Windows operational background)
-  - `docs/claude-code-cliproxy-linux-guide.md` (Linux operational background)
+  - `docs/claude-code-cliproxy-guide.md` (Operational background and guide)
   - `config.yaml` at repo root (bootstrap config used when issuing new auth tokens near the binary)
 - References:
   - Official repository: https://github.com/router-for-me/CLIProxyAPI
