@@ -1,16 +1,16 @@
-import os
+import argparse
+import json
+import stat
 import sys
 import urllib.request
-import platform
-import tarfile
-import zipfile
-import stat
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, Tuple
 
 # --- Configuration ---
 MIN_PYTHON_VERSION = (3, 8)
-REPO_RAW_URL = "https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main"
-VERSION = "6.8.24"
+DEFAULT_REPO = "levin1006/claude-code-cli-proxy"
+DEFAULT_TAG = "main"
 
 INSTALL_DIR = Path.home() / ".cli-proxy"
 DIRECTORIES_TO_CREATE = [
@@ -22,127 +22,218 @@ DIRECTORIES_TO_CREATE = [
     "configs/codex",
     "configs/gemini",
 ]
-FILES_TO_DOWNLOAD = {
+
+ARCH_ALIASES = {
+    "x86_64": "amd64",
+    "amd64": "amd64",
+    "aarch64": "arm64",
+    "arm64": "arm64",
+}
+
+SUPPORTED_PLATFORM_KEYS = {
+    "linux-amd64",
+    "linux-arm64",
+    "windows-amd64",
+}
+
+CORE_FILES = {
     "config.yaml": "config.yaml",
     "bash/cc-proxy.sh": "bash/cc-proxy.sh",
     "powershell/cc-proxy.ps1": "powershell/cc-proxy.ps1",
     "python/cc_proxy.py": "python/cc_proxy.py",
 }
 
-def check_python_version():
+BINARY_PATHS = {
+    "linux-amd64": "CLIProxyAPI/linux/amd64/cli-proxy-api",
+    "linux-arm64": "CLIProxyAPI/linux/arm64/cli-proxy-api",
+    "windows-amd64": "CLIProxyAPI/windows/amd64/cli-proxy-api.exe",
+}
+
+CANONICAL_BINARY_NAME = {
+    "linux": "cli-proxy-api",
+    "windows": "cli-proxy-api.exe",
+}
+
+INSTALL_META_JSON = INSTALL_DIR / ".install-meta.json"
+INSTALLED_TAG_FILE = INSTALL_DIR / ".installed-tag"
+
+
+def check_python_version() -> None:
     if sys.version_info < MIN_PYTHON_VERSION:
-        print(f"Error: Python {MIN_PYTHON_VERSION[0]}.{MIN_PYTHON_VERSION[1]} or higher is required.")
+        print(
+            f"Error: Python {MIN_PYTHON_VERSION[0]}.{MIN_PYTHON_VERSION[1]} or higher is required."
+        )
         sys.exit(1)
     print(f"Python version check passed: {sys.version.split(' ')[0]}")
 
-def create_directories():
-    for d in DIRECTORIES_TO_CREATE:
-        (INSTALL_DIR / d).mkdir(parents=True, exist_ok=True)
+
+def create_directories() -> None:
+    for directory in DIRECTORIES_TO_CREATE:
+        (INSTALL_DIR / directory).mkdir(parents=True, exist_ok=True)
     print(f"Created directories under {INSTALL_DIR}")
 
-def download_file(url, target_path):
+
+def download_file(url: str, target_path: Path) -> None:
     print(f"Downloading {url} ...")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         urllib.request.urlretrieve(url, target_path)
         print(f"  -> Saved to {target_path}")
-    except Exception as e:
-        print(f"Error downloading {url}: {e}")
+    except Exception as exc:
+        print(f"Error downloading {url}: {exc}")
         sys.exit(1)
 
-def download_core_files():
-    for local_path, repo_path in FILES_TO_DOWNLOAD.items():
-        url = f"{REPO_RAW_URL}/{repo_path}"
-        target = INSTALL_DIR / local_path
-        download_file(url, target)
 
-def download_and_extract_binary():
+def raw_tag_url(repo: str, tag: str, relative_path: str) -> str:
+    return f"https://raw.githubusercontent.com/{repo}/{tag}/{relative_path}"
+
+
+def normalize_system_and_arch() -> Tuple[str, str]:
+    import platform
+
     system = platform.system().lower()
     machine = platform.machine().lower()
 
-    if system == "windows":
-        filename = "cli-proxy-api.exe"
-        url = f"{REPO_RAW_URL}/{filename}"
-        target_path = INSTALL_DIR / "cli-proxy-api.exe"
-        download_file(url, target_path)
-    else:
-        # Linux / macOS
-        # Assuming we download the tar.gz from official releases or our repo if stored there
-        # We use a placeholder URL here, adjust to actual binary download URL
-        # For this setup, we'll try to get it from the router-for-me releases or a known URL
-        # According to the context: "CLIProxyAPI_6.8.24_linux_amd64.tar.gz"
-        filename = f"CLIProxyAPI_{VERSION}_linux_amd64.tar.gz"
-        url = f"https://github.com/router-for-me/CLIProxyAPI/releases/download/v{VERSION}/{filename}"
-        tar_path = INSTALL_DIR / filename
-        
-        download_file(url, tar_path)
-        
-        print(f"Extracting {filename} ...")
-        try:
-            with tarfile.open(tar_path, "r:gz") as tar:
-                # Find the binary in the tar
-                for member in tar.getmembers():
-                    if "cli-proxy-api" in member.name and not member.isdir():
-                        # Extract it directly to INSTALL_DIR
-                        member.name = "cli-proxy-api" # Flatten
-                        tar.extract(member, path=INSTALL_DIR)
-                        break
-        except Exception as e:
-            print(f"Error extracting binary: {e}")
-            sys.exit(1)
-        finally:
-            if tar_path.exists():
-                tar_path.unlink() # Clean up tar file
-                
-        # Make binary and bash script executable
-        binary_path = INSTALL_DIR / "cli-proxy-api"
+    if system not in {"linux", "windows"}:
+        print(
+            "Error: Unsupported OS. Supported combinations are linux-amd64, linux-arm64, windows-amd64."
+        )
+        sys.exit(1)
+
+    normalized_arch = ARCH_ALIASES.get(machine)
+    if not normalized_arch:
+        print(
+            f"Error: Unsupported architecture '{machine}'. Supported architectures: amd64, arm64."
+        )
+        sys.exit(1)
+
+    platform_key = f"{system}-{normalized_arch}"
+    if platform_key not in SUPPORTED_PLATFORM_KEYS:
+        print(
+            f"Error: Unsupported platform combination '{platform_key}'. "
+            f"Supported: {', '.join(sorted(SUPPORTED_PLATFORM_KEYS))}"
+        )
+        sys.exit(1)
+
+    return system, platform_key
+
+
+def download_core_files(repo: str, tag: str) -> None:
+    for local_path, repo_path in CORE_FILES.items():
+        url = raw_tag_url(repo, tag, repo_path)
+        target = INSTALL_DIR / local_path
+        download_file(url, target)
+
+
+def download_binary(repo: str, tag: str, system: str, platform_key: str) -> None:
+    relative_path = BINARY_PATHS.get(platform_key)
+    if not relative_path:
+        print(
+            f"Error: No binary mapping for '{platform_key}'. "
+            f"Supported: {', '.join(sorted(BINARY_PATHS.keys()))}"
+        )
+        sys.exit(1)
+
+    binary_url = raw_tag_url(repo, tag, relative_path)
+    canonical_name = CANONICAL_BINARY_NAME[system]
+    target_path = INSTALL_DIR / canonical_name
+    download_file(binary_url, target_path)
+
+    if system == "linux":
+        target_path.chmod(target_path.stat().st_mode | stat.S_IEXEC)
         bash_script = INSTALL_DIR / "bash/cc-proxy.sh"
-        
-        if binary_path.exists():
-            binary_path.chmod(binary_path.stat().st_mode | stat.S_IEXEC)
         if bash_script.exists():
             bash_script.chmod(bash_script.stat().st_mode | stat.S_IEXEC)
-            
-        print("Set executable permissions for Linux/macOS binary and scripts.")
 
-def setup_profile():
+    print(f"Installed canonical binary: {target_path}")
+
+
+def setup_profile() -> None:
+    import platform
+
     system = platform.system().lower()
-    
+
     if system == "windows":
-        profile_cmd = f". {INSTALL_DIR}\\powershell\\cc-proxy.ps1\nInstall-CCProxyProfile"
         print("\n--- Setup Profile ---")
-        print("To complete setup, run the following in PowerShell to register the profile:")
+        print("To complete setup, run the following in PowerShell:")
         print(f"  . {INSTALL_DIR}\\powershell\\cc-proxy.ps1")
         print("  Install-CCProxyProfile")
-    else:
-        # Linux/macOS
-        # Add source line to ~/.bashrc and ~/.zshrc
-        source_line = f"source {INSTALL_DIR}/bash/cc-proxy.sh"
-        
-        for rc_file in [".bashrc", ".zshrc"]:
-            rc_path = Path.home() / rc_file
-            if rc_path.exists():
-                content = rc_path.read_text()
-                if source_line not in content:
-                    with open(rc_path, "a") as f:
-                        f.write(f"\n# Added by cli-proxy installer\n{source_line}\n")
-                    print(f"Added source line to ~/{rc_file}")
-                else:
-                    print(f"Source line already exists in ~/{rc_file}")
-                    
-        print("\n--- Setup Profile ---")
-        print("To apply changes immediately, run:")
-        print(f"  source {INSTALL_DIR}/bash/cc-proxy.sh")
-        print("Or restart your terminal.")
+        return
 
-def main():
+    source_line = f"source {INSTALL_DIR}/bash/cc-proxy.sh"
+
+    for rc_file in [".bashrc", ".zshrc"]:
+        rc_path = Path.home() / rc_file
+        if not rc_path.exists():
+            continue
+
+        content = rc_path.read_text(encoding="utf-8")
+        if source_line in content:
+            print(f"Source line already exists in ~/{rc_file}")
+            continue
+
+        with open(rc_path, "a", encoding="utf-8") as file_handle:
+            file_handle.write(f"\n# Added by cli-proxy installer\n{source_line}\n")
+
+        print(f"Added source line to ~/{rc_file}")
+
+    print("\n--- Setup Profile ---")
+    print("To apply changes immediately, run:")
+    print(f"  source {INSTALL_DIR}/bash/cc-proxy.sh")
+    print("Or restart your terminal.")
+
+
+def write_install_metadata(repo: str, tag: str, platform_key: str) -> None:
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    meta: Dict[str, Any] = {
+        "repo": repo,
+        "tag": tag,
+        "platform": platform_key,
+        "installed_at_utc": now_iso,
+        "install_dir": str(INSTALL_DIR),
+        "binary_source": "repo-tag-raw",
+    }
+
+    INSTALL_META_JSON.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    INSTALLED_TAG_FILE.write_text(f"{tag}\n", encoding="utf-8")
+    print(f"Wrote install metadata: {INSTALL_META_JSON}")
+    print(f"Wrote installed tag file: {INSTALLED_TAG_FILE}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Install cli-proxy runtime from repository tag")
+    parser.add_argument(
+        "--tag",
+        default=DEFAULT_TAG,
+        help="Git tag or branch to install from (recommended: vX.Y.Z)",
+    )
+    parser.add_argument(
+        "--repo",
+        default=DEFAULT_REPO,
+        help="GitHub repository in owner/name form",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
     print("Starting cli-proxy-api installation...")
     check_python_version()
     create_directories()
-    download_core_files()
-    download_and_extract_binary()
+
+    system, platform_key = normalize_system_and_arch()
+    print(f"Using repository ref: {args.tag}")
+    print(f"Detected platform: {platform_key}")
+
+    download_core_files(args.repo, args.tag)
+    download_binary(args.repo, args.tag, system, platform_key)
+
+    write_install_metadata(args.repo, args.tag, platform_key)
     setup_profile()
-    
     print("\n✅ Installation complete!")
+
 
 if __name__ == "__main__":
     main()

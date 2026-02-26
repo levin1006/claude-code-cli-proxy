@@ -8,8 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Python 3.8+** required (stdlib only, no pip install).
 - Binary version in this repo: `CLIProxyAPI_6.8.24_windows_amd64`.
 - Main moving parts:
-  - `cli-proxy-api.exe` (Windows binary, prebuilt)
-  - `cli-proxy-api` (Linux binary, user downloads separately; gitignored)
+  - `CLIProxyAPI/windows/amd64/cli-proxy-api.exe` (Windows binary, prebuilt)
+  - `CLIProxyAPI/linux/amd64/cli-proxy-api` (Linux amd64 binary)
+  - `CLIProxyAPI/linux/arm64/cli-proxy-api` (Linux arm64 binary)
   - `configs/<provider>/config.yaml` (+ provider credential JSON files)
   - `python/cc_proxy.py` (cross-platform core logic — single source of truth)
   - `powershell/cc-proxy.ps1` (Windows thin wrapper, ~50 lines, delegates to Python core)
@@ -154,7 +155,7 @@ http://127.0.0.1:<provider-port>/management.html
 - Keep root `config.yaml` tracked as a bootstrap config for issuing new auth tokens near the binary.
 - If adding new providers/ports, update `PORTS` and `PRESETS` in `python/cc_proxy.py`; add entrypoint functions to both shell wrappers.
 - `routing.strategy` is set to `round-robin` in provider configs.
-- Linux binary (`cli-proxy-api`) is gitignored; users download it separately.
+- Repository-managed binaries are stored under `CLIProxyAPI/<os>/<arch>/` and `python/cc_proxy.py` resolves host-appropriate paths automatically.
 
 ## Build / lint / test reality
 - No repo-local build/lint/test pipeline was found (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Makefile`, and `README.md` are absent).

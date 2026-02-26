@@ -1,50 +1,100 @@
-# Context
-사용자가 저장소(클론) 없이 쉽게 프로그램을 설치하고 사용할 수 있는 배포 방식을 문의했습니다.
-유지보수를 용이하게 하기 위해, 운영체제별 진입점(`install.sh`, `install.ps1`)은 최소화하고 실제 설치 로직(디렉토리 생성, 파일 다운로드, 프로필 등록 등)은 파이썬 스크립트(`install.py`)로 통합하는 아키텍처를 적용합니다.
-이 계획 문서는 `docs/installation-architecture.md`에도 저장하여 개발 완료 시 함께 커밋하고 이후 이 문서를 기반으로 유지보수합니다.
+# Installation Architecture (Tag-Based Raw)
 
-# Implementation Plan
+## Background
 
-## 1. 계획 문서 저장 (선행 작업)
-- 현재까지 작성된 이 계획을 `docs/installation-architecture.md` 파일로 복사하여 프로젝트 히스토리로 남깁니다.
+기존 설치 체계는 `main` raw와 외부 release URL이 혼합되어 있어 설치 결과 재현성이 약하고,
+아키텍처 매칭(amd64/arm64) 오류가 발생할 수 있었습니다.
 
-## 2. Core 설치 로직 (`install.py`) 작성
-플랫폼(Windows/Linux/macOS)을 자동 감지하고 동일한 로직으로 설치를 수행하는 독립적인 파이썬 스크립트입니다.
-- **사전 검사**: Python 3.8 이상 확인.
-- **경로 설정**: 홈 디렉토리 아래 `~/.cli-proxy` (`$HOME/.cli-proxy`)를 설치 경로로 지정.
-- **디렉토리 생성**: `bash/`, `powershell/`, `python/`, `configs/antigravity/`, `configs/claude/`, `configs/codex/`, `configs/gemini/`
-- **파일 다운로드**:
-    - `urllib.request`를 사용하여 GitHub Raw URL에서 직접 다운로드.
-    - 다운로드 대상 저장소 정보는 파이썬 내장 `urllib`를 이용해 설치 스크립트 실행 환경에서 동적으로(또는 인자/환경 변수 통해) 유추 가능하도록 구성 (기본값은 현재 작업 중인 main 브랜치).
-    - 대상 파일: `config.yaml`, `bash/cc-proxy.sh`, `powershell/cc-proxy.ps1`, `python/cc_proxy.py`.
-- **바이너리 처리**:
-    - **Linux/macOS**: 공식 릴리즈(`v6.8.24`) 압축파일(`CLIProxyAPI_6.8.24_linux_amd64.tar.gz`)을 다운로드 및 압축 해제 후 `~/.cli-proxy/cli-proxy-api`로 저장.
-    - **Windows**: 저장소에 포함된 `CLIProxyAPI_6.8.24_windows_amd64.exe`를 Raw URL에서 다운로드하여 `~/.cli-proxy/cli-proxy-api.exe`로 저장.
-    - Unix 환경일 경우 다운로드한 바이너리와 `bash/cc-proxy.sh` 쉘 래퍼 파일에 실행 권한(`chmod +x`) 부여.
-- **프로필 등록**:
-    - 다운로드한 `python/cc_proxy.py` 모듈을 임포트하거나 하위 프로세스로 실행하여 기존의 `install_profile()` (또는 쉘 스크립트의 해당 로직) 기능을 수행하도록 연동.
-    - 혹은 `.bashrc`/`.zshrc` (Linux/macOS) 및 `$PROFILE` (Windows) 파일에 안전하게 래퍼를 `source` 하도록 문자열 추가.
-- **완료 안내**: 사용자가 터미널을 재시작하거나 프로필을 리로드하도록 안내 메시지 출력.
+현재 구조의 목표는 다음 3가지를 동시에 만족하는 것입니다.
 
-## 3. 진입점 래퍼 스크립트 작성
-사용자가 "복사 & 붙여넣기" 할 수 있는 아주 얇은 래퍼 스크립트입니다.
+1. 검증된 커밋 기준 배포 (tag gate)
+2. OS/아키텍처 자동 선택 (amd64/arm64)
+3. 레포 내부 바이너리 경로 일원화로 운영 단순화
 
-### 3.1 `install.sh` (Linux/macOS 용)
-- `curl` 명령어 확인.
-- `python3` 명령어 확인.
-- GitHub Raw URL에서 `install.py`를 `/tmp/install_cc_proxy.py`로 다운로드.
-- `python3 /tmp/install_cc_proxy.py` 실행.
-- 스크립트 종료 후 임시 파일 삭제.
+---
 
-### 3.2 `install.ps1` (Windows 용)
-- `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12` 설정 (오래된 PowerShell 호환성).
-- `python` 실행 파일 확인 (없으면 에러 출력).
-- `Invoke-WebRequest`로 `install.py`를 `$env:TEMP\install_cc_proxy.py`로 다운로드.
-- `python $env:TEMP\install_cc_proxy.py` 실행.
-- 스크립트 종료 후 임시 파일 삭제.
+## 1) Tag-based raw 설치 흐름
 
-# Critical Files
-- `docs/installation-architecture.md` (계획 및 아키텍처 문서)
-- `install.py` (핵심 설치 로직)
-- `install.sh` (Linux/macOS 진입점 래퍼)
-- `install.ps1` (Windows 진입점 래퍼)
+one-liner 진입점(`install.sh`, `install.ps1`)은 저장소 raw URL에서 `install.py`를 내려받아 실행합니다.
+핵심은 브랜치 고정이 아니라 **ref 고정**입니다.
+
+- 기본 동작: `main`
+- 권장 운영: `--tag vX.Y.Z`
+
+검증 완료 후 생성한 tag를 ref로 지정하면,
+release asset 없이도 설치 결과 재현성을 확보할 수 있습니다.
+
+---
+
+## 2) Repository internal binary layout
+
+바이너리는 저장소 내부의 아키텍처별 경로로 관리합니다.
+
+- `CLIProxyAPI/windows/amd64/cli-proxy-api.exe`
+- `CLIProxyAPI/linux/amd64/cli-proxy-api`
+- `CLIProxyAPI/linux/arm64/cli-proxy-api`
+
+설치 시에는 위 경로에서 플랫폼에 맞는 바이너리를 내려받아 아래 canonical 이름으로 배치합니다.
+
+- Linux: `~/.cli-proxy/cli-proxy-api`
+- Windows: `~/.cli-proxy/cli-proxy-api.exe`
+
+---
+
+## 3) install.py 플랫폼 매트릭스 해석
+
+`install.py`는 아래 순서로 설치를 수행합니다.
+
+1. Python 버전 검사 (3.8+)
+2. 설치 디렉토리 생성 (`~/.cli-proxy/...`)
+3. `config.yaml`, wrapper 스크립트, `python/cc_proxy.py` 다운로드
+4. `platform.system()` + `platform.machine()` 정규화
+   - `x86_64|amd64 -> amd64`
+   - `aarch64|arm64 -> arm64`
+5. 플랫폼 키(`linux-amd64`, `linux-arm64`, `windows-amd64`)로 레포 내부 바이너리 경로 선택
+6. 바이너리 다운로드 + canonical 이름으로 설치
+7. profile 연결
+
+미지원 조합은 즉시 명확한 에러 메시지로 종료합니다.
+
+또한 설치 완료 시 아래 파일로 배포 tag 추적 정보를 남깁니다.
+
+- `~/.cli-proxy/.installed-tag` (단일 태그 문자열)
+- `~/.cli-proxy/.install-meta.json` (`repo`, `tag`, `platform`, `installed_at_utc`, `binary_source`)
+
+---
+
+## 4) Deployment procedure (tag gate)
+
+### 배포 전 필수 확인
+
+1. 설치 스모크 테스트 (임시 경로)
+   - Linux amd64
+   - Linux arm64
+   - Windows amd64
+2. 설치 후 기본 동작 확인
+   - `cc-proxy-status`
+   - `cc-proxy-links`
+   - `cc-codex` 시작 단계
+3. 설치 추적 파일 확인
+   - `~/.cli-proxy/.installed-tag`
+   - `~/.cli-proxy/.install-meta.json`
+
+### 배포 순서
+
+1. 검증 완료 커밋 확정
+2. tag 생성 (`vX.Y.Z`)
+3. 사용자 설치 시 `--tag vX.Y.Z` 사용
+
+핵심 원칙: **검증 완료 이전에는 운영용 tag를 생성하지 않습니다.**
+
+---
+
+## 5) Rollback model
+
+이 구조에서는 이전 tag를 지정해 즉시 롤백 설치가 가능합니다.
+
+- Linux: `install.sh --tag vX.Y.Z`
+- Windows: `install.ps1 --tag vX.Y.Z`
+
+설치 결과가 tag 기준으로 고정되므로, 재현 가능한 복구 경로를 제공합니다.
