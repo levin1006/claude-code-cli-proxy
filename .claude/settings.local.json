@@ -29,7 +29,10 @@
       "Bash(py:*)",
       "mcp__plugin_serena_serena__execute_shell_command",
       "mcp__plugin_serena_serena__initial_instructions",
-      "WebFetch(domain:code.visualstudio.com)"
+      "WebFetch(domain:code.visualstudio.com)",
+      "Bash(chmod +x:*)",
+      "Bash(echo:*)",
+      "Bash(xargs sh:*)"
     ]
   }
 }
