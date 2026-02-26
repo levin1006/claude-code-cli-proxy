@@ -42,12 +42,13 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.ps1 | iex
 ```
 
-특정 태그로 고정 설치하려면:
+배포/검증용으로 특정 태그를 완전히 고정하려면(권장):
 
 ```powershell
-$script = irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.ps1
-[ScriptBlock]::Create($script).InvokeReturnAsIs('--tag','vX.Y.Z')
+irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.Y.Z/installers/install.ps1 | iex
 ```
+
+> 참고: `main` URL에 `--tag`를 전달하는 방식도 동작하지만, 설치기 스크립트 자체는 `main` 기준입니다. 완전 고정이 필요하면 URL 자체를 태그로 고정하세요.
 
 설치 후 안내되는 명령어(`Install-CCProxyProfile`)를 실행하면 `$PROFILE`에 자동 등록되어 다음 세션부터 바로 사용할 수 있습니다.
 
@@ -57,11 +58,22 @@ $script = irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/
 curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.sh | bash
 ```
 
-특정 태그로 고정 설치하려면:
+배포/검증용으로 특정 태그를 완전히 고정하려면(권장):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.sh | bash -s -- --tag vX.Y.Z
+curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.Y.Z/installers/install.sh | bash
 ```
+
+원격/컨테이너 환경에서 management 링크 포트를 분리하려면(권장):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.Y.Z/installers/install.sh | bash -s -- --remote
+```
+
+> `--remote`는 `CC_PROXY_LOCAL_PORT_OFFSET=10000`을 현재 세션 + 쉘 프로필(`~/.bashrc`, `~/.zshrc`)에 설정합니다.
+> 직접 값을 지정하려면 `--port-offset <number>`를 사용할 수 있습니다.
+>
+> 참고: `main` URL에 `--tag`를 전달하는 방식도 동작하지만, 설치기 스크립트 자체는 `main` 기준입니다. 완전 고정이 필요하면 URL 자체를 태그로 고정하세요.
 
 설치 시 `~/.bashrc` 및 `~/.zshrc`에 자동으로 `source` 구문이 추가되므로, 터미널을 재시작하거나 `source ~/.cli-proxy/shell/bash/cc-proxy.sh`를 실행하면 즉시 적용됩니다.
 
