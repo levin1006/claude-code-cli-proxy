@@ -7,12 +7,12 @@
 
 ## 1. 아키텍처 개요
 
-기존에는 쉘 스크립트(PowerShell, Bash)가 복잡한 프로세스 관리 로직을 모두 가지고 있었으나, 현재는 **Python 코어 스크립트(`python/cc_proxy.py`)** 가 모든 논리를 담당하고 OS 쉘 스크립트는 단순 래퍼(Thin wrapper) 역할만 수행합니다.
+기존에는 쉘 스크립트(PowerShell, Bash)가 복잡한 프로세스 관리 로직을 모두 가지고 있었으나, 현재는 **Python 코어 스크립트(`core/cc_proxy.py`)** 가 모든 논리를 담당하고 OS 쉘 스크립트는 단순 래퍼(Thin wrapper) 역할만 수행합니다.
 
 | 환경 | 스크립트 위치 | 스크립트 로드 방식 | 프로필 등록 명령 | 바이너리 |
 |---|---|---|---|---|
-| **Windows** | `powershell/cc-proxy.ps1` | `. .\powershell\cc-proxy.ps1` | `Install-CCProxyProfile` | `CLIProxyAPI/windows/amd64/cli-proxy-api.exe` |
-| **Linux** | `bash/cc-proxy.sh` | `source bash/cc-proxy.sh` | `cc_proxy_install_profile` | `CLIProxyAPI/linux/<arch>/cli-proxy-api` |
+| **Windows** | `shell/powershell/cc-proxy.ps1` | `. .\shell\powershell\cc-proxy.ps1` | `Install-CCProxyProfile` | `CLIProxyAPI/windows/amd64/cli-proxy-api.exe` |
+| **Linux** | `shell/bash/cc-proxy.sh` | `source shell/bash/cc-proxy.sh` | `cc_proxy_install_profile` | `CLIProxyAPI/linux/<arch>/cli-proxy-api` |
 
 **핵심 원리 (공통)**:
 1. **Provider별 고정 포트**: (Antigravity: 18417, Claude: 18418, Codex: 18419, Gemini: 18420)
@@ -72,13 +72,13 @@ claude-code-cli-proxy/
 
 **Windows (PowerShell)**:
 ```powershell
-. .\powershell\cc-proxy.ps1
+. .\shell\powershell\cc-proxy.ps1
 Install-CCProxyProfile
 ```
 
 **Linux (Bash)**:
 ```bash
-source bash/cc-proxy.sh
+source shell/bash/cc-proxy.sh
 cc_proxy_install_profile
 ```
 > 첫 로드 시 대화형(Y/N) 프롬프트로 자동 프로필 등록을 권장하기도 합니다.
@@ -154,4 +154,4 @@ A6. `cc-proxy-stop` 명령을 실행하면 남아있는 `.proxy.pid` 파일들�
 
 ---
 
-> 기타 문의사항이나 세부 코드는 본 저장소의 `python/cc_proxy.py` 모듈과 `CLAUDE.md`를 참고하세요.
+> 기타 문의사항이나 세부 코드는 본 저장소의 `core/cc_proxy.py` 모듈과 `CLAUDE.md`를 참고하세요.

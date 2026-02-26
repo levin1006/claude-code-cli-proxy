@@ -14,9 +14,9 @@ DEFAULT_TAG = "main"
 
 INSTALL_DIR = Path.home() / ".cli-proxy"
 DIRECTORIES_TO_CREATE = [
-    "bash",
-    "powershell",
-    "python",
+    "shell/bash",
+    "shell/powershell",
+    "core",
     "configs/antigravity",
     "configs/claude",
     "configs/codex",
@@ -38,9 +38,9 @@ SUPPORTED_PLATFORM_KEYS = {
 
 CORE_FILES = {
     "config.yaml": "config.yaml",
-    "bash/cc-proxy.sh": "bash/cc-proxy.sh",
-    "powershell/cc-proxy.ps1": "powershell/cc-proxy.ps1",
-    "python/cc_proxy.py": "python/cc_proxy.py",
+    "shell/bash/cc-proxy.sh": "shell/bash/cc-proxy.sh",
+    "shell/powershell/cc-proxy.ps1": "shell/powershell/cc-proxy.ps1",
+    "core/cc_proxy.py": "core/cc_proxy.py",
 }
 
 BINARY_PATHS = {
@@ -141,7 +141,7 @@ def download_binary(repo: str, tag: str, system: str, platform_key: str) -> None
 
     if system == "linux":
         target_path.chmod(target_path.stat().st_mode | stat.S_IEXEC)
-        bash_script = INSTALL_DIR / "bash/cc-proxy.sh"
+        bash_script = INSTALL_DIR / "shell/bash/cc-proxy.sh"
         if bash_script.exists():
             bash_script.chmod(bash_script.stat().st_mode | stat.S_IEXEC)
 
@@ -156,11 +156,11 @@ def setup_profile() -> None:
     if system == "windows":
         print("\n--- Setup Profile ---")
         print("To complete setup, run the following in PowerShell:")
-        print(f"  . {INSTALL_DIR}\\powershell\\cc-proxy.ps1")
+        print(f"  . {INSTALL_DIR}\\shell\\powershell\\cc-proxy.ps1")
         print("  Install-CCProxyProfile")
         return
 
-    source_line = f"source {INSTALL_DIR}/bash/cc-proxy.sh"
+    source_line = f"source {INSTALL_DIR}/shell/bash/cc-proxy.sh"
 
     for rc_file in [".bashrc", ".zshrc"]:
         rc_path = Path.home() / rc_file
@@ -179,7 +179,7 @@ def setup_profile() -> None:
 
     print("\n--- Setup Profile ---")
     print("To apply changes immediately, run:")
-    print(f"  source {INSTALL_DIR}/bash/cc-proxy.sh")
+    print(f"  source {INSTALL_DIR}/shell/bash/cc-proxy.sh")
     print("Or restart your terminal.")
 
 

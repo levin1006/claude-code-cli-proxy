@@ -46,7 +46,7 @@ done
 
 echo "Using repository ref: $REQUESTED_TAG"
 
-INSTALLER_URL="https://raw.githubusercontent.com/${REPO}/${REQUESTED_TAG}/install.py"
+INSTALLER_URL="https://raw.githubusercontent.com/${REPO}/${REQUESTED_TAG}/installers/install.py"
 TEMP_SCRIPT="/tmp/install_cc_proxy.py"
 
 echo "Downloading core installation script from repository ref..."

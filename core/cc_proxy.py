@@ -4,15 +4,15 @@ CLIProxyAPI + Claude Code helper — cross-platform core
 Python 3.8+, stdlib only.
 
 Usage:
-  python3 cc_proxy.py run <preset> [-- claude-args...]
-  python3 cc_proxy.py start <provider> | all
-  python3 cc_proxy.py stop [provider]
-  python3 cc_proxy.py status [provider]
-  python3 cc_proxy.py links [provider]
-  python3 cc_proxy.py auth <provider>
-  python3 cc_proxy.py set-secret <secret>
-  python3 cc_proxy.py install-profile [--hint-only]
-  python3 cc_proxy.py clean [-- claude-args...]
+  python3 core/cc_proxy.py run <preset> [-- claude-args...]
+  python3 core/cc_proxy.py start <provider> | all
+  python3 core/cc_proxy.py stop [provider]
+  python3 core/cc_proxy.py status [provider]
+  python3 core/cc_proxy.py links [provider]
+  python3 core/cc_proxy.py auth <provider>
+  python3 core/cc_proxy.py set-secret <secret>
+  python3 core/cc_proxy.py install-profile [--hint-only]
+  python3 core/cc_proxy.py clean [-- claude-args...]
 """
 
 import os
@@ -881,7 +881,7 @@ def install_profile(base_dir, hint_only=False):
 
 
 def _install_profile_linux(base_dir, hint_only):
-    src_line = 'source "{}/bash/cc-proxy.sh"'.format(base_dir)
+    src_line = 'source "{}/shell/bash/cc-proxy.sh"'.format(base_dir)
     rcfiles = []
     for name in (".bashrc", ".zshrc"):
         p = Path.home() / name
@@ -917,7 +917,7 @@ def _install_profile_linux(base_dir, hint_only):
 
 
 def _install_profile_windows(base_dir, hint_only):
-    script_path = base_dir / "powershell" / "cc-proxy.ps1"
+    script_path = base_dir / "shell" / "powershell" / "cc-proxy.ps1"
     profile_line = '. "{}"'.format(script_path)
 
     try:

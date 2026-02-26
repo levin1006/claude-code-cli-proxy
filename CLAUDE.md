@@ -12,9 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `CLIProxyAPI/linux/amd64/cli-proxy-api` (Linux amd64 binary)
   - `CLIProxyAPI/linux/arm64/cli-proxy-api` (Linux arm64 binary)
   - `configs/<provider>/config.yaml` (+ provider credential JSON files)
-  - `python/cc_proxy.py` (cross-platform core logic — single source of truth)
-  - `powershell/cc-proxy.ps1` (Windows thin wrapper, ~50 lines, delegates to Python core)
-  - `bash/cc-proxy.sh` (Linux thin wrapper, ~50 lines, delegates to Python core)
+  - `core/cc_proxy.py` (cross-platform core logic — single source of truth)
+  - `shell/powershell/cc-proxy.ps1` (Windows thin wrapper, ~50 lines, delegates to Python core)
+  - `shell/bash/cc-proxy.sh` (Linux thin wrapper, ~50 lines, delegates to Python core)
   - `docs/claude-code-cliproxy-guide.md` (Operational background and guide)
   - `config.yaml` at repo root (bootstrap config used when issuing new auth tokens near the binary)
 - References:
@@ -27,20 +27,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 Shell wrappers (thin)             Python core (shared)
 ┌──────────────────────┐         ┌──────────────────────────┐
-│ bash/cc-proxy.sh     │─call──> │                          │
-│  ~50 lines           │         │  python/cc_proxy.py      │
-├──────────────────────┤         │  ~650 lines, stdlib only │
-│ powershell/          │─call──> │  cross-platform          │
-│  cc-proxy.ps1        │         │                          │
+│ shell/bash/cc-proxy.sh│─call──> │                          │
+│  ~50 lines            │         │  core/cc_proxy.py        │
+├───────────────────────┤         │  ~650 lines, stdlib only │
+│ shell/powershell/     │─call──> │  cross-platform          │
+│  cc-proxy.ps1         │         │                          │
 │  ~50 lines           │         └──────────────────────────┘
 └──────────────────────┘
 ```
 
-1. Shell wrappers (`cc-<provider>` functions) call `python3 python/cc_proxy.py run <preset> -- [args]`.
-2. `python/cc_proxy.py` contains ALL logic: token validation, proxy start/stop, health check, claude invocation.
+1. Shell wrappers (`cc-<provider>` functions) call `python3 core/cc_proxy.py run <preset> -- [args]`.
+2. `core/cc_proxy.py` contains ALL logic: token validation, proxy start/stop, health check, claude invocation.
 3. Provider isolation is done by working directory + `auth-dir: "./"` in each provider config, so each instance only sees credentials in its own folder.
 4. Startup rewrites provider base `config.yaml` with provider-specific port and launches the binary with `-config <base-config-file>`.
-5. `python/cc_proxy.py run` sets env vars for the claude child process directly (no shell env modification needed):
+5. `core/cc_proxy.py run` sets env vars for the claude child process directly (no shell env modification needed):
    - `ANTHROPIC_BASE_URL`
    - `ANTHROPIC_AUTH_TOKEN=sk-dummy`
    - `ANTHROPIC_DEFAULT_OPUS_MODEL`
@@ -63,7 +63,7 @@ Shell wrappers (thin)             Python core (shared)
 - **Base dir**: Auto-detected via `Path(__file__).parent.parent` in Python (no hardcoded paths).
 
 ### Port model in this repo
-Defined in `python/cc_proxy.py` (single source of truth, synced to both shell wrappers):
+Defined in `core/cc_proxy.py` (single source of truth, synced to both shell wrappers):
 - `antigravity`: `18417`
 - `claude`: `18418`
 - `codex`: `18419`
@@ -77,12 +77,14 @@ Defined in `python/cc_proxy.py` (single source of truth, synced to both shell wr
 
 #### Load helper functions (one-off shell)
 ```powershell
-. .\powershell\cc-proxy.ps1
+. .\shell\powershell\cc-proxy.ps1
 ```
+
+> Legacy note: root one-liner URLs (`.../install.ps1`, `.../install.sh`) are intentionally unsupported. Use `installers/install.ps1` / `installers/install.sh`.
 
 #### Register helpers in PowerShell profile (recommended first-time setup)
 ```powershell
-. .\powershell\cc-proxy.ps1
+. .\shell\powershell\cc-proxy.ps1
 Install-CCProxyProfile
 ```
 `Install-CCProxyProfile` updates `$PROFILE` and loads it into the current session immediately.
@@ -92,12 +94,12 @@ New PowerShell sessions will auto-load helpers via the profile line.
 
 #### Load helper functions (one-off shell)
 ```bash
-source bash/cc-proxy.sh
+source shell/bash/cc-proxy.sh
 ```
 
 #### Register helpers in shell profile (recommended first-time setup)
 ```bash
-source bash/cc-proxy.sh
+source shell/bash/cc-proxy.sh
 cc_proxy_install_profile
 ```
 `cc_proxy_install_profile` adds a source line to `~/.bashrc` and `~/.zshrc` (if they exist).
@@ -143,9 +145,32 @@ Swap port for other providers (`18418`, `18419`, `18420`).
 http://127.0.0.1:<provider-port>/management.html
 ```
 
+## Verification policy (important: repo vs installed)
+- Do not treat repository-source verification as installation verification.
+- **Repo verification** (`source shell/bash/cc-proxy.sh` or `. .\shell\powershell\cc-proxy.ps1`) only validates current working tree behavior.
+- **Installed verification** (`source ~/.cli-proxy/shell/bash/cc-proxy.sh` or `. "~\.cli-proxy\shell\powershell\cc-proxy.ps1"`) validates one-liner/installers output.
+
+### Required 2-track verification flow
+1. **Repo track (development check)**
+   - Load repo wrapper from repository root.
+   - Run: function availability + `cc-proxy-start-all` / `cc-proxy-status` / `cc-proxy-links` / `cc-proxy-stop`.
+   - Do **not** use this track as install success evidence.
+2. **Installed track (release gate)**
+   - Use one-liner installer (`installers/install.sh` or `installers/install.ps1`) into `~/.cli-proxy`.
+   - Open a fresh shell and load from `~/.cli-proxy/shell/...`.
+   - Re-run lifecycle and smoke checks (`/` and `/v1/models`).
+   - Only this track is valid evidence for deployment readiness.
+
+### Safety rules to avoid false positives
+- Keep repo track and installed track in separate shell sessions.
+- Confirm active base dir before tests:
+  - Bash: `echo "$CC_PROXY_BASE_DIR"`
+  - PowerShell: `$global:CLI_PROXY_BASE_DIR`
+- In repo track, avoid profile registration commands intended for installed path (`cc_proxy_install_profile`, `Install-CCProxyProfile`) unless explicitly testing profile logic.
+
 ## Editing guidance for future Claude instances
-- **To change model names or ports**: edit `python/cc_proxy.py` ONLY — single source of truth. Shell wrappers delegate automatically.
-- Prefer editing `python/cc_proxy.py` for all logic changes. Shell wrappers (`bash/cc-proxy.sh`, `powershell/cc-proxy.ps1`) are thin and rarely need editing.
+- **To change model names or ports**: edit `core/cc_proxy.py` ONLY — single source of truth. Shell wrappers delegate automatically.
+- Prefer editing `core/cc_proxy.py` for all logic changes. Shell wrappers (`shell/bash/cc-proxy.sh`, `shell/powershell/cc-proxy.ps1`) are thin and rarely need editing.
 - Treat `configs/*/.config.runtime.yaml` as generated artifacts and keep them untracked.
 - Treat `configs/*/.proxy.pid` as runtime state and keep them untracked.
 - Use provider base `config.yaml` as dashboard-connected runtime source of truth.
@@ -153,9 +178,9 @@ http://127.0.0.1:<provider-port>/management.html
 - For new providers, copy root `config.yaml` as a template and then set provider port.
 - Treat `**/main.log` as runtime log output and keep it untracked.
 - Keep root `config.yaml` tracked as a bootstrap config for issuing new auth tokens near the binary.
-- If adding new providers/ports, update `PORTS` and `PRESETS` in `python/cc_proxy.py`; add entrypoint functions to both shell wrappers.
+- If adding new providers/ports, update `PORTS` and `PRESETS` in `core/cc_proxy.py`; add entrypoint functions to both shell wrappers.
 - `routing.strategy` is set to `round-robin` in provider configs.
-- Repository-managed binaries are stored under `CLIProxyAPI/<os>/<arch>/` and `python/cc_proxy.py` resolves host-appropriate paths automatically.
+- Repository-managed binaries are stored under `CLIProxyAPI/<os>/<arch>/` and `core/cc_proxy.py` resolves host-appropriate paths automatically.
 
 ## Build / lint / test reality
 - No repo-local build/lint/test pipeline was found (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Makefile`, and `README.md` are absent).

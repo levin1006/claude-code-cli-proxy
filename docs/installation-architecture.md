@@ -15,11 +15,12 @@
 
 ## 1) Tag-based raw 설치 흐름
 
-one-liner 진입점(`install.sh`, `install.ps1`)은 저장소 raw URL에서 `install.py`를 내려받아 실행합니다.
+one-liner 진입점(`installers/install.sh`, `installers/install.ps1`)은 저장소 raw URL에서 `installers/install.py`를 내려받아 실행합니다.
 핵심은 브랜치 고정이 아니라 **ref 고정**입니다.
 
 - 기본 동작: `main`
 - 권장 운영: `--tag vX.Y.Z`
+- 비호환 정책: 루트 one-liner(`.../install.sh`, `.../install.ps1`)는 미지원. `.../installers/install.sh`, `.../installers/install.ps1`만 지원
 
 검증 완료 후 생성한 tag를 ref로 지정하면,
 release asset 없이도 설치 결과 재현성을 확보할 수 있습니다.
@@ -47,7 +48,7 @@ release asset 없이도 설치 결과 재현성을 확보할 수 있습니다.
 
 1. Python 버전 검사 (3.8+)
 2. 설치 디렉토리 생성 (`~/.cli-proxy/...`)
-3. `config.yaml`, wrapper 스크립트, `python/cc_proxy.py` 다운로드
+3. `config.yaml`, wrapper 스크립트, `core/cc_proxy.py` 다운로드
 4. `platform.system()` + `platform.machine()` 정규화
    - `x86_64|amd64 -> amd64`
    - `aarch64|arm64 -> arm64`
@@ -94,7 +95,7 @@ release asset 없이도 설치 결과 재현성을 확보할 수 있습니다.
 
 이 구조에서는 이전 tag를 지정해 즉시 롤백 설치가 가능합니다.
 
-- Linux: `install.sh --tag vX.Y.Z`
-- Windows: `install.ps1 --tag vX.Y.Z`
+- Linux: `installers/install.sh --tag vX.Y.Z`
+- Windows: `installers/install.ps1 --tag vX.Y.Z`
 
 설치 결과가 tag 기준으로 고정되므로, 재현 가능한 복구 경로를 제공합니다.

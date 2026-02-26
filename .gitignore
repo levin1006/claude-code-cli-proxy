@@ -15,9 +15,9 @@ configs/*/.proxy.pid
 configs/*/static/
 
 # Python bytecode cache
-python/__pycache__/
+core/__pycache__/
 **/*.pyc
 
 # Shell script backups (one-time migration artifacts)
-bash/cc-proxy.sh.bak
-powershell/cc-proxy.ps1.bak
+shell/bash/cc-proxy.sh.bak
+shell/powershell/cc-proxy.ps1.bak
