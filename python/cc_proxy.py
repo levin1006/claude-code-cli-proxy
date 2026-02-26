@@ -888,12 +888,12 @@ def _install_profile_linux(base_dir, hint_only):
         if p.exists():
             rcfiles.append(p)
 
-    already_installed = any(
-        src_line in p.read_text(errors="replace")
-        for p in rcfiles
-    )
+    if not rcfiles:
+        rcfiles = [Path.home() / ".bashrc"]
 
-    if already_installed:
+    missing = [p for p in rcfiles if src_line not in p.read_text(errors="replace")]
+
+    if not missing:
         if not hint_only:
             print("[cc-proxy] Shell profile already contains cc-proxy loader.")
         return
@@ -908,17 +908,10 @@ def _install_profile_linux(base_dir, hint_only):
             print("[cc-proxy] Skipped. Run cc_proxy_install_profile later.")
             return
 
-    if not rcfiles:
-        rcfiles = [Path.home() / ".bashrc"]
-
-    for rc in rcfiles:
-        content = rc.read_text(errors="replace") if rc.exists() else ""
-        if src_line not in content:
-            with rc.open("a") as f:
-                f.write("\n{}\n".format(src_line))
-            print("[cc-proxy] Added loader to {}.".format(rc))
-        else:
-            print("[cc-proxy] {} already contains cc-proxy loader.".format(rc))
+    for rc in missing:
+        with rc.open("a") as f:
+            f.write("\n{}\n".format(src_line))
+        print("[cc-proxy] Added loader to {}.".format(rc))
 
     print("[cc-proxy] New terminals will auto-load helpers.")
 
