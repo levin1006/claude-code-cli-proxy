@@ -321,18 +321,19 @@ def _is_dashboard_server_alive(port):
 
 
 def _start_dashboard_server(dashboard_path):
+    preferred_port = 18500 + get_local_port_offset()
     script = (
         "import functools, http.server, socketserver\n"
         "handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=r'{}')\n"
         "class MyServer(socketserver.TCPServer):\n"
         "    allow_reuse_address = True\n"
         "try:\n"
-        "    httpd = MyServer(('127.0.0.1', 18500), handler)\n"
+        "    httpd = MyServer(('127.0.0.1', {}), handler)\n"
         "except OSError:\n"
         "    httpd = MyServer(('127.0.0.1', 0), handler)\n"
         "print(httpd.server_address[1], flush=True)\n"
         "httpd.serve_forever()\n"
-    ).format(str(dashboard_path.parent))
+    ).format(str(dashboard_path.parent), preferred_port)
 
     kwargs = {
         "stdin": subprocess.DEVNULL,
