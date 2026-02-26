@@ -36,8 +36,10 @@ fi
 
 REPO="${CC_PROXY_INSTALL_REPO:-levin1006/claude-code-cli-proxy}"
 REQUESTED_TAG="${CC_PROXY_INSTALL_TAG:-main}"
+PORT_OFFSET=""
+REMOTE_MODE=0
 
-# Parse optional args: --tag vX.Y.Z --repo owner/name
+# Parse optional args: --tag vX.Y.Z --repo owner/name --remote --port-offset N
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --tag)
@@ -56,13 +58,36 @@ while [[ $# -gt 0 ]]; do
             REPO="$2"
             shift 2
             ;;
+        --remote)
+            REMOTE_MODE=1
+            shift
+            ;;
+        --port-offset)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: --port-offset requires a value"
+                exit 1
+            fi
+            PORT_OFFSET="$2"
+            shift 2
+            ;;
         *)
             echo "Error: unknown argument '$1'"
-            echo "Usage: install.sh [--tag <tag-or-branch>] [--repo <owner/name>]"
+            echo "Usage: install.sh [--tag <tag-or-branch>] [--repo <owner/name>] [--remote] [--port-offset <number>]"
             exit 1
             ;;
     esac
 done
+
+if [[ -z "$PORT_OFFSET" && "$REMOTE_MODE" -eq 1 ]]; then
+    PORT_OFFSET="10000"
+fi
+
+if [[ -n "$PORT_OFFSET" ]]; then
+    if ! [[ "$PORT_OFFSET" =~ ^-?[0-9]+$ ]]; then
+        echo "Error: --port-offset must be an integer"
+        exit 1
+    fi
+fi
 
 echo "Using repository ref: $REQUESTED_TAG"
 
@@ -74,6 +99,23 @@ curl -fsSL "$INSTALLER_URL" -o "$TEMP_SCRIPT"
 
 echo "Executing core installation script..."
 python3 "$TEMP_SCRIPT" --repo "$REPO" --tag "$REQUESTED_TAG"
+
+if [[ -n "$PORT_OFFSET" ]]; then
+    OFFSET_LINE="export CC_PROXY_LOCAL_PORT_OFFSET=$PORT_OFFSET"
+    export CC_PROXY_LOCAL_PORT_OFFSET="$PORT_OFFSET"
+    echo "Configured port offset for this session: $PORT_OFFSET"
+
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+        if [[ -f "$rc" ]]; then
+            if grep -qxF "$OFFSET_LINE" "$rc" 2>/dev/null; then
+                echo "Port offset already configured in $rc"
+            else
+                printf "\n# Added by cli-proxy installer\n%s\n" "$OFFSET_LINE" >> "$rc"
+                echo "Saved port offset to $rc"
+            fi
+        fi
+    done
+fi
 
 # Cleanup
 rm -f "$TEMP_SCRIPT"
