@@ -14,6 +14,26 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
+# Ensure Claude Code is available for cc-* commands
+if ! command -v claude &> /dev/null; then
+    echo "Claude Code not found. Installing Claude Code..."
+    if curl -fsSL https://claude.ai/install.sh | bash; then
+        echo "Claude Code installation completed."
+    else
+        echo "Error: failed to install Claude Code."
+        exit 1
+    fi
+
+    # Refresh common user-level bin paths for current shell session
+    export PATH="$HOME/.local/bin:$HOME/.claude/bin:$HOME/bin:$PATH"
+fi
+
+if ! command -v claude &> /dev/null; then
+    echo "Error: 'claude' command is still unavailable after install."
+    echo "Please restart your shell and rerun this installer."
+    exit 1
+fi
+
 REPO="${CC_PROXY_INSTALL_REPO:-levin1006/claude-code-cli-proxy}"
 REQUESTED_TAG="${CC_PROXY_INSTALL_TAG:-main}"
 
