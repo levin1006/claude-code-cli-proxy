@@ -26,6 +26,7 @@ import subprocess
 import tempfile
 import json
 import base64
+import platform
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -63,9 +64,32 @@ def get_base_dir():
     return Path(__file__).resolve().parent.parent
 
 
+def get_host_arch():
+    machine = platform.machine().lower()
+    if machine in ("x86_64", "amd64"):
+        return "amd64"
+    if machine in ("aarch64", "arm64"):
+        return "arm64"
+    return "amd64"
+
+
+def get_repo_binary_path(base_dir):
+    if IS_WINDOWS:
+        return base_dir / "CLIProxyAPI" / "windows" / "amd64" / "cli-proxy-api.exe"
+    return base_dir / "CLIProxyAPI" / "linux" / get_host_arch() / "cli-proxy-api"
+
+
 def get_binary_path(base_dir):
     name = "cli-proxy-api.exe" if IS_WINDOWS else "cli-proxy-api"
-    return base_dir / name
+    canonical_path = base_dir / name
+    if canonical_path.exists():
+        return canonical_path
+
+    repo_binary_path = get_repo_binary_path(base_dir)
+    if repo_binary_path.exists():
+        return repo_binary_path
+
+    return canonical_path
 
 
 def get_provider_dir(base_dir, provider):
@@ -300,9 +324,14 @@ def _start_dashboard_server(dashboard_path):
     script = (
         "import functools, http.server, socketserver\n"
         "handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=r'{}')\n"
-        "with socketserver.TCPServer(('127.0.0.1', 0), handler) as httpd:\n"
-        "    print(httpd.server_address[1], flush=True)\n"
-        "    httpd.serve_forever()\n"
+        "class MyServer(socketserver.TCPServer):\n"
+        "    allow_reuse_address = True\n"
+        "try:\n"
+        "    httpd = MyServer(('127.0.0.1', 18500), handler)\n"
+        "except OSError:\n"
+        "    httpd = MyServer(('127.0.0.1', 0), handler)\n"
+        "print(httpd.server_address[1], flush=True)\n"
+        "httpd.serve_forever()\n"
     ).format(str(dashboard_path.parent))
 
     kwargs = {
