@@ -10,9 +10,15 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 
 ## 구성 요소
 
+저장소 내부 바이너리는 아키텍처별 경로로 관리합니다:
+
+- `CLIProxyAPI/windows/amd64/cli-proxy-api.exe`
+- `CLIProxyAPI/linux/amd64/cli-proxy-api`
+- `CLIProxyAPI/linux/arm64/cli-proxy-api`
+
 단일 명령어 설치를 완료하면 `~/.cli-proxy/` 디렉토리 아래에 다음 파일들이 자동으로 구성됩니다:
 
-- `cli-proxy-api.exe` (Windows) 또는 `cli-proxy-api` (Linux/macOS) 바이너리
+- canonical 실행파일명 바이너리: `cli-proxy-api.exe` (Windows) 또는 `cli-proxy-api` (Linux/macOS)
 - `powershell/cc-proxy.ps1` (Windows helper functions)
 - `bash/cc-proxy.sh` (Linux/macOS helper functions)
 - `python/cc_proxy.py` (핵심 로직을 처리하는 공통 파이썬 스크립트)
@@ -33,12 +39,25 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.ps1 | iex
 ```
 
+특정 태그로 고정 설치하려면:
+
+```powershell
+$script = irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.ps1
+[ScriptBlock]::Create($script).InvokeReturnAsIs('--tag','vX.Y.Z')
+```
+
 설치 후 안내되는 명령어(`Install-CCProxyProfile`)를 실행하면 `$PROFILE`에 자동 등록되어 다음 세션부터 바로 사용할 수 있습니다.
 
 ### Linux / macOS (Bash)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.sh | bash
+```
+
+특정 태그로 고정 설치하려면:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.sh | bash -s -- --tag vX.Y.Z
 ```
 
 설치 시 `~/.bashrc` 및 `~/.zshrc`에 자동으로 `source` 구문이 추가되므로, 터미널을 재시작하거나 `source ~/.cli-proxy/bash/cc-proxy.sh`를 실행하면 즉시 적용됩니다.
@@ -115,6 +134,13 @@ curl -fsS http://127.0.0.1:18418/
 curl http://127.0.0.1:18418/v1/models
 ```
 
+## 태그 기반 설치 아키텍처 요약
+
+- 설치기는 저장소의 `raw` 경로를 사용하되, **`main` 고정이 아니라 `--tag vX.Y.Z`로 ref를 고정**할 수 있습니다.
+- `install.py`는 `CLIProxyAPI/<os>/<arch>/` 경로에서 플랫폼별 바이너리를 선택해 canonical 실행파일명으로 설치합니다.
+- 설치 후 `~/.cli-proxy/.installed-tag`와 `~/.cli-proxy/.install-meta.json`에 설치 tag/repo/platform 정보를 기록해 역추적할 수 있습니다.
+- release asset 없이도 태그 기준으로 재현 가능한 설치가 가능합니다.
+
 ## 참고 링크
 
 - CLIProxyAPI repository: https://github.com/router-for-me/CLIProxyAPI
@@ -126,6 +152,6 @@ curl http://127.0.0.1:18418/v1/models
 - 공개 저장소로 push하기 전에는 credential 유출 여부를 반드시 점검하세요.
 - `configs/*/logs/`는 `.gitignore`로 제외되어 있습니다.
 - `configs/*/.config.runtime.yaml` 및 `**/main.log`는 실행 중 생성/갱신되는 파일이므로 `.gitignore`로 추적 제외합니다.
-- 루트 `config.yaml`은 `cli-proxy-api.exe`와 같은 경로에 두고 신규 인증 토큰 발급/초기 설정 시작점으로 사용합니다.
+- 루트 `config.yaml`은 저장소 루트에 유지하고 신규 인증 토큰 발급/초기 설정 시작점으로 사용합니다.
 - provider별 `config.yaml`은 dashboard가 직접 갱신하는 운영 파일로 사용하며 Git 추적에서 제외합니다.
 - 신규 provider는 루트 `config.yaml`을 템플릿으로 복사한 뒤 provider 포트(예: 18417~18420)를 설정해 사용합니다.

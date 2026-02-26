@@ -11,8 +11,8 @@
 
 | 환경 | 스크립트 위치 | 스크립트 로드 방식 | 프로필 등록 명령 | 바이너리 |
 |---|---|---|---|---|
-| **Windows** | `powershell/cc-proxy.ps1` | `. .\powershell\cc-proxy.ps1` | `Install-CCProxyProfile` | `cli-proxy-api.exe` |
-| **Linux** | `bash/cc-proxy.sh` | `source bash/cc-proxy.sh` | `cc_proxy_install_profile` | `cli-proxy-api` |
+| **Windows** | `powershell/cc-proxy.ps1` | `. .\powershell\cc-proxy.ps1` | `Install-CCProxyProfile` | `CLIProxyAPI/windows/amd64/cli-proxy-api.exe` |
+| **Linux** | `bash/cc-proxy.sh` | `source bash/cc-proxy.sh` | `cc_proxy_install_profile` | `CLIProxyAPI/linux/<arch>/cli-proxy-api` |
 
 **핵심 원리 (공통)**:
 1. **Provider별 고정 포트**: (Antigravity: 18417, Claude: 18418, Codex: 18419, Gemini: 18420)
@@ -31,14 +31,18 @@
    cd claude-code-cli-proxy
    ```
 
-2. **운영체제에 맞는 바이너리**를 받아 저장소 루트에 위치시킵니다.
-   - **Windows**: [GitHub Releases](https://github.com/router-for-me/CLIProxyAPI/releases)에서 `windows_amd64` 버전의 `cli-proxy-api.exe`를 다운로드
-   - **Linux**:
-     ```bash
-     # amd64 (x86_64)
-     wget -qO- "https://github.com/router-for-me/CLIProxyAPI/releases/latest/download/CLIProxyAPI_linux_amd64.tar.gz" | tar xz
-     chmod +x cli-proxy-api
-     ```
+2. **운영체제/아키텍처에 맞는 바이너리**를 받아 아키텍처별 경로에 배치합니다.
+   - **Windows amd64**: `CLIProxyAPI/windows/amd64/cli-proxy-api.exe`
+   - **Linux amd64**: `CLIProxyAPI/linux/amd64/cli-proxy-api`
+   - **Linux arm64**: `CLIProxyAPI/linux/arm64/cli-proxy-api`
+
+   Linux 예시:
+   ```bash
+   mkdir -p CLIProxyAPI/linux/amd64
+   wget -qO- "https://github.com/router-for-me/CLIProxyAPI/releases/latest/download/CLIProxyAPI_linux_amd64.tar.gz" | tar xz
+   mv cli-proxy-api CLIProxyAPI/linux/amd64/cli-proxy-api
+   chmod +x CLIProxyAPI/linux/amd64/cli-proxy-api
+   ```
 
 ### 2.2 디렉터리 및 토큰 구조 세팅
 
@@ -47,7 +51,10 @@
 
 ```text
 claude-code-cli-proxy/
-  cli-proxy-api / cli-proxy-api.exe
+  CLIProxyAPI/
+    windows/amd64/cli-proxy-api.exe
+    linux/amd64/cli-proxy-api
+    linux/arm64/cli-proxy-api
   configs/
     claude/
       claude-account1.json
@@ -140,7 +147,7 @@ cc-proxy-auth gemini
 인증에 성공하면 프록시가 자동으로 재시작되어 최신 토큰을 반영합니다.
 
 ### Q5. "Permission denied" 오류가 발생합니다. (Linux)
-A5. 다운로드 받은 바이너리에 실행 권한이 없는 경우입니다. `chmod +x cli-proxy-api` 명령으로 실행 권한을 부여하세요.
+A5. 다운로드 받은 바이너리에 실행 권한이 없는 경우입니다. `chmod +x CLIProxyAPI/linux/<arch>/cli-proxy-api` 명령으로 실행 권한을 부여하세요.
 
 ### Q6. 프록시 프로세스가 비정상 종료되어 시작이 안 됩니다.
 A6. `cc-proxy-stop` 명령을 실행하면 남아있는 `.proxy.pid` 파일들이 모두 자동 정리됩니다. 포트 충돌이 의심될 경우 Windows는 `netstat -ano -p TCP`, Linux는 `ss -tlnp` 명령으로 직접 확인할 수 있습니다.
