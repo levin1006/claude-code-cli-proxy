@@ -137,10 +137,23 @@ def download_binary(repo: str, tag: str, system: str, platform_key: str) -> None
     binary_url = raw_tag_url(repo, tag, relative_path)
     canonical_name = CANONICAL_BINARY_NAME[system]
     target_path = INSTALL_DIR / canonical_name
-    download_file(binary_url, target_path)
+    temp_target = INSTALL_DIR / f".{canonical_name}.tmp"
+
+    download_file(binary_url, temp_target)
 
     if system == "linux":
-        target_path.chmod(target_path.stat().st_mode | stat.S_IEXEC)
+        temp_target.chmod(temp_target.stat().st_mode | stat.S_IEXEC)
+
+    try:
+        temp_target.replace(target_path)
+    except OSError as exc:
+        print(f"Error replacing binary at {target_path}: {exc}")
+        print("Hint: stop running proxies before reinstall (e.g., cc-proxy-stop).")
+        if temp_target.exists():
+            temp_target.unlink(missing_ok=True)
+        sys.exit(1)
+
+    if system == "linux":
         bash_script = INSTALL_DIR / "shell/bash/cc-proxy.sh"
         if bash_script.exists():
             bash_script.chmod(bash_script.stat().st_mode | stat.S_IEXEC)
