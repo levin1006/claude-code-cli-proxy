@@ -1,14 +1,14 @@
 # CLIProxyAPI + Claude Code helpers (Windows) — thin wrapper
-# Delegates all logic to python/cc_proxy.py
-# Load: . .\powershell\cc-proxy.ps1
+# Delegates all logic to core/cc_proxy.py
+# Load: . .\shell\powershell\cc-proxy.ps1
 
 # Auto-detect base dir (fixes hardcoded D:\OneDrive\... path bug)
-$global:CLI_PROXY_BASE_DIR = Split-Path -Parent $PSScriptRoot
+$global:CLI_PROXY_BASE_DIR = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 $script:_CC_PROXY_PY     = if (Get-Command py      -ErrorAction SilentlyContinue) { "py"      } `
                           elseif (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } `
                           else { "python" }
-$script:_CC_PROXY_SCRIPT = Join-Path $global:CLI_PROXY_BASE_DIR "python\cc_proxy.py"
+$script:_CC_PROXY_SCRIPT = Join-Path $global:CLI_PROXY_BASE_DIR "core\cc_proxy.py"
 
 function _cc_proxy { & $script:_CC_PROXY_PY $script:_CC_PROXY_SCRIPT @args }
 
@@ -40,7 +40,7 @@ function Install-CCProxyProfile { _cc_proxy install-profile }
 
 # Profile hint on first dot-source
 function Show-CCProxyProfileSetupHint {
-  $profileLine = ". `"$(Join-Path $global:CLI_PROXY_BASE_DIR 'powershell\cc-proxy.ps1')`""
+  $profileLine = ". `"$(Join-Path $global:CLI_PROXY_BASE_DIR 'shell\powershell\cc-proxy.ps1')`""
   if (Test-Path $PROFILE) {
     $c = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
     if ($c -and $c.Contains($profileLine)) { return }

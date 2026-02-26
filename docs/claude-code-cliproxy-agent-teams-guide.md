@@ -9,7 +9,7 @@ Claude Code의 '에이전트 팀(Agent Team)' 기능을 `CLIProxyAPI` 프록시 
 과거에 발생했던 404 에러는 프로바이더의 종류 때문이 아니라, **환경 변수 주입의 불완전함** 때문이었습니다.
 
 *   **원인**: Claude Code는 명시적인 모델 지정이 없을 때 내부적인 하드코딩 모델명(예: `claude-3-5-sonnet-20241022`)을 사용합니다. 프록시가 이 이름을 인식하지 못하면 404 에러가 발생합니다.
-*   **해결**: 프록시 런처(`python/cc_proxy.py`)가 다음 **3가지 티어 환경 변수**를 모두 주입함으로써 해결되었습니다.
+*   **해결**: 프록시 런처(`core/cc_proxy.py`)가 다음 **3가지 티어 환경 변수**를 모두 주입함으로써 해결되었습니다.
     *   `ANTHROPIC_DEFAULT_OPUS_MODEL`
     *   `ANTHROPIC_DEFAULT_SONNET_MODEL`
     *   `ANTHROPIC_DEFAULT_HAIKU_MODEL`

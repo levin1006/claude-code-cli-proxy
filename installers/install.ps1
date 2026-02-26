@@ -46,7 +46,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 
 Write-Host "Using repository ref: $requestedTag"
 
-$installerUrl = "https://raw.githubusercontent.com/$repo/$requestedTag/install.py"
+$installerUrl = "https://raw.githubusercontent.com/$repo/$requestedTag/installers/install.py"
 $tempScript = "$env:TEMP\install_cc_proxy.py"
 
 # Download Python installer

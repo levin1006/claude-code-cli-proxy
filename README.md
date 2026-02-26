@@ -5,7 +5,7 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 ## 핵심 개념
 
 - 이 저장소는 **CLIProxyAPI 소스코드 저장소가 아니라 운영/설정 저장소**입니다.
-- `powershell/cc-proxy.ps1` (Windows) 또는 `bash/cc-proxy.sh` (Linux)가 진입점이며, provider별 포트/환경변수/프로세스 관리를 담당합니다.
+- `shell/powershell/cc-proxy.ps1` (Windows) 또는 `shell/bash/cc-proxy.sh` (Linux)가 진입점이며, provider별 포트/환경변수/프로세스 관리를 담당합니다.
 - provider 분리는 `configs/<provider>/` + `auth-dir: "./"` 구조로 강제됩니다.
 
 ## 구성 요소
@@ -19,30 +19,33 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 단일 명령어 설치를 완료하면 `~/.cli-proxy/` 디렉토리 아래에 다음 파일들이 자동으로 구성됩니다:
 
 - canonical 실행파일명 바이너리: `cli-proxy-api.exe` (Windows) 또는 `cli-proxy-api` (Linux/macOS)
-- `powershell/cc-proxy.ps1` (Windows helper functions)
-- `bash/cc-proxy.sh` (Linux/macOS helper functions)
-- `python/cc_proxy.py` (핵심 로직을 처리하는 공통 파이썬 스크립트)
+- `shell/powershell/cc-proxy.ps1` (Windows helper functions)
+- `shell/bash/cc-proxy.sh` (Linux/macOS helper functions)
+- `core/cc_proxy.py` (핵심 로직을 처리하는 공통 파이썬 스크립트)
 - `configs/<provider>/config.yaml` (+ credential JSON)
 - `docs/claude-code-cliproxy-windows-guide.md` (Windows 운영 가이드)
 - `docs/claude-code-cliproxy-linux-guide.md` (Linux 운영 가이드)
 - `config.yaml` (루트 샘플/운영용 기본 설정)
 
-## 빠른 시작 (단일 명령어 자동 설치)
+## 배포용 설치 (one-liner, `~/.cli-proxy`에 설치)
 
-저장소를 클론할 필요 없이 터미널에 명령어 한 줄을 복사하여 붙여넣으면 설치가 완료됩니다. 설치 시 `~/.cli-proxy` 디렉토리에 필요한 모든 파일과 바이너리가 구성됩니다.
+이 섹션은 **배포/최종 사용자 설치용**입니다. 저장소를 클론할 필요 없이 터미널에 명령어 한 줄을 복사하여 붙여넣으면 설치가 완료되며, `~/.cli-proxy` 디렉토리에 필요한 모든 파일과 바이너리가 구성됩니다.
+저장소를 이미 clone해서 그 안의 파일을 직접 사용하려면 아래 **"저장소에서 직접 실행 (개발/검증)"** 섹션을 사용하세요.
+
+> 호환성 정책: 기존 루트 one-liner URL(`.../install.sh`, `.../install.ps1`)은 더 이상 지원하지 않습니다. 반드시 `.../installers/install.sh`, `.../installers/install.ps1` 경로를 사용하세요.
 
 ### Windows (PowerShell)
 
 관리자 권한 없이 일반 PowerShell에서 실행 가능합니다.
 
 ```powershell
-irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.ps1 | iex
 ```
 
 특정 태그로 고정 설치하려면:
 
 ```powershell
-$script = irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.ps1
+$script = irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.ps1
 [ScriptBlock]::Create($script).InvokeReturnAsIs('--tag','vX.Y.Z')
 ```
 
@@ -51,27 +54,49 @@ $script = irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/
 ### Linux / macOS (Bash)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.sh | bash
 ```
 
 특정 태그로 고정 설치하려면:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install.sh | bash -s -- --tag vX.Y.Z
+curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.sh | bash -s -- --tag vX.Y.Z
 ```
 
-설치 시 `~/.bashrc` 및 `~/.zshrc`에 자동으로 `source` 구문이 추가되므로, 터미널을 재시작하거나 `source ~/.cli-proxy/bash/cc-proxy.sh`를 실행하면 즉시 적용됩니다.
+설치 시 `~/.bashrc` 및 `~/.zshrc`에 자동으로 `source` 구문이 추가되므로, 터미널을 재시작하거나 `source ~/.cli-proxy/shell/bash/cc-proxy.sh`를 실행하면 즉시 적용됩니다.
 
 ---
 
-## 수동 설치 및 기존 방식 (참고용)
+## 저장소에서 직접 실행 (개발/검증)
+
+> 이 방법은 **이미 clone한 repository의 파일을 직접 source**합니다.
+> 즉, `~/.cli-proxy`에 재설치하지 않고 현재 작업 중인 저장소 내용을 그대로 사용합니다.
+
+### Windows (PowerShell, repo root에서)
+
+```powershell
+. .\shell\powershell\cc-proxy.ps1
+```
+
+### Linux / macOS (Bash, repo root에서)
+
+```bash
+source shell/bash/cc-proxy.sh
+```
+
+---
+
+## one-liner 설치 사용자용: `~/.cli-proxy` 수동 로드 (선택)
+
+> 이 섹션은 one-liner로 이미 `~/.cli-proxy`에 설치된 경우에만 해당합니다.
+> repository에서 직접 `source shell/...` 방식으로 실행 중이라면 이 섹션은 건너뛰세요.
 
 ### Windows (PowerShell)
 
 #### 1) 1회 로드
 
 ```powershell
-. "~\.cli-proxy\powershell\cc-proxy.ps1"
+. "~\.cli-proxy\shell\powershell\cc-proxy.ps1"
 ```
 
 최초 실행 시 프로필 등록 여부를 Y/N으로 묻습니다.
@@ -91,7 +116,7 @@ Install-CCProxyProfile
 #### 1) 1회 로드
 
 ```bash
-source ~/.cli-proxy/bash/cc-proxy.sh
+source ~/.cli-proxy/shell/bash/cc-proxy.sh
 ```
 
 처음 source 시 프로필 등록 여부를 Y/N으로 묻습니다.
@@ -120,7 +145,7 @@ cc-proxy-stop      # proxy 중지(명시적으로 종료할 때만 사용)
 
 ## 포트 매핑
 
-`powershell/cc-proxy.ps1` 및 `bash/cc-proxy.sh` 기준:
+`shell/powershell/cc-proxy.ps1` 및 `shell/bash/cc-proxy.sh` 기준:
 
 - antigravity: `18417`
 - claude: `18418`
@@ -137,7 +162,7 @@ curl http://127.0.0.1:18418/v1/models
 ## 태그 기반 설치 아키텍처 요약
 
 - 설치기는 저장소의 `raw` 경로를 사용하되, **`main` 고정이 아니라 `--tag vX.Y.Z`로 ref를 고정**할 수 있습니다.
-- `install.py`는 `CLIProxyAPI/<os>/<arch>/` 경로에서 플랫폼별 바이너리를 선택해 canonical 실행파일명으로 설치합니다.
+- `installers/install.py`는 `CLIProxyAPI/<os>/<arch>/` 경로에서 플랫폼별 바이너리를 선택해 canonical 실행파일명으로 설치합니다.
 - 설치 후 `~/.cli-proxy/.installed-tag`와 `~/.cli-proxy/.install-meta.json`에 설치 tag/repo/platform 정보를 기록해 역추적할 수 있습니다.
 - release asset 없이도 태그 기준으로 재현 가능한 설치가 가능합니다.
 
