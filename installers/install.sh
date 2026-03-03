@@ -39,7 +39,10 @@ REQUESTED_TAG="${CC_PROXY_INSTALL_TAG:-main}"
 PORT_OFFSET=""
 REMOTE_MODE=0
 
-# Parse optional args: --tag vX.Y.Z --repo owner/name --remote --port-offset N
+SOURCE_MODE=""
+LOCAL_PATH=""
+
+# Parse optional args: --tag vX.Y.Z --repo owner/name --source <remote|local|auto> --local-path <path> --remote --port-offset N
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --tag)
@@ -62,6 +65,22 @@ while [[ $# -gt 0 ]]; do
             REMOTE_MODE=1
             shift
             ;;
+        --source)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: --source requires a value"
+                exit 1
+            fi
+            SOURCE_MODE="$2"
+            shift 2
+            ;;
+        --local-path)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: --local-path requires a value"
+                exit 1
+            fi
+            LOCAL_PATH="$2"
+            shift 2
+            ;;
         --port-offset)
             if [[ $# -lt 2 ]]; then
                 echo "Error: --port-offset requires a value"
@@ -72,11 +91,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Error: unknown argument '$1'"
-            echo "Usage: install.sh [--tag <tag-or-branch>] [--repo <owner/name>] [--remote] [--port-offset <number>]"
+            echo "Usage: install.sh [--tag <tag-or-branch>] [--repo <owner/name>] [--source <remote|local|auto>] [--local-path <path>] [--remote] [--port-offset <number>]"
             exit 1
             ;;
     esac
 done
+
+if [[ -n "$SOURCE_MODE" ]]; then
+    if [[ "$SOURCE_MODE" != "remote" && "$SOURCE_MODE" != "local" && "$SOURCE_MODE" != "auto" ]]; then
+        echo "Error: --source must be one of: remote, local, auto"
+        exit 1
+    fi
+fi
 
 if [[ -z "$PORT_OFFSET" && "$REMOTE_MODE" -eq 1 ]]; then
     PORT_OFFSET="10000"
@@ -98,7 +124,14 @@ echo "Downloading core installation script from repository ref..."
 curl -fsSL "$INSTALLER_URL" -o "$TEMP_SCRIPT"
 
 echo "Executing core installation script..."
-python3 "$TEMP_SCRIPT" --repo "$REPO" --tag "$REQUESTED_TAG"
+if [[ -z "$SOURCE_MODE" ]]; then
+    SOURCE_MODE="remote"
+fi
+PY_ARGS=(--repo "$REPO" --tag "$REQUESTED_TAG" --source "$SOURCE_MODE")
+if [[ -n "$LOCAL_PATH" ]]; then
+    PY_ARGS+=(--local-path "$LOCAL_PATH")
+fi
+python3 "$TEMP_SCRIPT" "${PY_ARGS[@]}"
 
 if [[ -n "$PORT_OFFSET" ]]; then
     OFFSET_LINE="export CC_PROXY_LOCAL_PORT_OFFSET=$PORT_OFFSET"

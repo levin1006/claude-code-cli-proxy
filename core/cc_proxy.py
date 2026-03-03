@@ -239,6 +239,58 @@ def is_ssh_session():
     return bool(os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"))
 
 
+def try_copy_to_clipboard(text):
+    """Try to copy text to the system clipboard. Returns True on success.
+
+    Strategy:
+    1. OSC 52 escape sequence — works over SSH through any modern terminal
+       (iTerm2, WezTerm, Kitty, Windows Terminal, etc.) without extra tools.
+    2. Platform clipboard commands (xclip, wl-copy, pbcopy, clip) — for
+       local sessions where the terminal may not relay OSC 52.
+    """
+    import base64 as _b64
+
+    # --- OSC 52 (preferred for SSH and modern terminals) ---
+    osc52 = "\033]52;c;{}\007".format(_b64.b64encode(text.encode("utf-8")).decode("ascii"))
+    try:
+        # Write directly to /dev/tty so it reaches the terminal even when
+        # stdout is piped or redirected.
+        with open("/dev/tty", "w") as _tty:
+            _tty.write(osc52)
+        return True
+    except Exception:
+        pass
+    try:
+        sys.stdout.write(osc52)
+        sys.stdout.flush()
+        return True
+    except Exception:
+        pass
+
+    # --- Platform clipboard tools (local sessions) ---
+    if IS_WINDOWS:
+        cmds = [["clip"]]
+    else:
+        cmds = [
+            ["wl-copy"],
+            ["xclip", "-selection", "clipboard"],
+            ["xsel", "--clipboard", "--input"],
+            ["pbcopy"],
+        ]
+    for cmd in cmds:
+        try:
+            proc = subprocess.run(
+                cmd, input=text.encode("utf-8"),
+                timeout=2, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            )
+            if proc.returncode == 0:
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            continue
+
+    return False
+
+
 def get_local_port_offset():
     raw = os.environ.get("CC_PROXY_LOCAL_PORT_OFFSET", "").strip()
     if raw:
@@ -259,6 +311,13 @@ def get_management_url(provider):
 
 def get_dashboard_link_port():
     return 18500 + get_local_port_offset()
+
+
+def get_dashboard_server_port():
+    """The port the local HTTP server actually binds to (always the base port).
+    SSH port-forwarding maps local:(18500+offset) → remote:18500, so the server
+    must always bind to the base port regardless of offset."""
+    return 18500
 
 
 def get_dashboard_file_path():
@@ -310,7 +369,7 @@ def stop_dashboard_server():
         time.sleep(0.1)
         stopped = True
 
-    dashboard_pid = resolve_pid_by_port(get_dashboard_link_port())
+    dashboard_pid = resolve_pid_by_port(get_dashboard_server_port())
     if dashboard_pid and is_pid_alive(dashboard_pid):
         kill_pid(dashboard_pid)
         time.sleep(0.1)
@@ -331,7 +390,7 @@ def _is_dashboard_server_alive(port):
 
 
 def _start_dashboard_server(dashboard_path):
-    preferred_port = get_dashboard_link_port()
+    preferred_port = get_dashboard_server_port()
     script = (
         "import functools, http.server, socketserver\n"
         "handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=r'{}')\n"
@@ -378,45 +437,24 @@ def _start_dashboard_server(dashboard_path):
     return port
 
 
-def get_dashboard_data_url():
-    sections = []
-    for provider in PROVIDERS:
-        url = get_management_url(provider)
-        sections.append(
-            '<section style="margin:8px 0;padding:8px;border:1px solid #bbb;border-radius:8px;">'
-            '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">'
-            '<strong>{}</strong><a href="{}" target="_blank" rel="noopener noreferrer">Open directly</a>'
-            '</div><iframe src="{}" style="width:100%;height:42vh;border:0;margin-top:8px;"></iframe></section>'
-            .format(provider, url, url)
-        )
-    html = (
-        "<!doctype html><html><head><meta charset='utf-8' />"
-        "<meta name='viewport' content='width=device-width, initial-scale=1' />"
-        "<title>CC Proxy Management Dashboards</title></head><body>"
-        "<h2>CC Proxy management dashboards</h2>{}</body></html>"
-    ).format("".join(sections))
-    encoded = base64.b64encode(html.encode("utf-8")).decode("ascii")
-    return "data:text/html;base64,{}".format(encoded)
 
 
 def get_dashboard_http_url():
     dashboard_path = get_dashboard_file_path()
-    preferred_port = get_dashboard_link_port()
+    server_port = get_dashboard_server_port()   # where the server actually binds
+    link_port = get_dashboard_link_port()       # what appears in the URL (offset applied)
 
-    if _is_dashboard_server_alive(preferred_port):
-        return "http://{}:{}/{}".format(HOST, preferred_port, dashboard_path.name)
+    if _is_dashboard_server_alive(server_port):
+        return "http://{}:{}/{}".format(HOST, link_port, dashboard_path.name)
 
     port = _start_dashboard_server(dashboard_path)
     if port:
-        return "http://{}:{}/{}".format(HOST, int(port), dashboard_path.name)
+        return "http://{}:{}/{}".format(HOST, link_port, dashboard_path.name)
 
     print(
-        "[cc-proxy] WARNING: Dashboard link server must use fixed port {} (already in use).".format(preferred_port),
+        "[cc-proxy] WARNING: Dashboard link server must use fixed port {} (already in use).".format(server_port),
         file=sys.stderr,
     )
-
-    if is_ssh_session():
-        return get_dashboard_data_url()
 
     return dashboard_path.resolve().as_uri()
 
@@ -585,7 +623,10 @@ def print_management_links(base_dir, provider=None, statuses=None):
             healthy,
             get_management_url(pvd),
         ))
-    print("[cc-proxy]   dashboard(all): {}".format(get_dashboard_http_url()))
+    dashboard_url = get_dashboard_http_url()
+    copied = try_copy_to_clipboard(dashboard_url)
+    suffix = "  (copied to clipboard)" if copied else ""
+    print("[cc-proxy]   dashboard(all): {}{}".format(dashboard_url, suffix))
 
 
 def cmd_links(base_dir, provider=None):
@@ -894,6 +935,12 @@ def install_profile(base_dir, hint_only=False):
 
 def _install_profile_linux(base_dir, hint_only):
     src_line = 'source "{}/shell/bash/cc-proxy.sh"'.format(base_dir)
+    ssh_offset_marker = "CC_PROXY_LOCAL_PORT_OFFSET"
+    ssh_offset_block = (
+        "# cc-proxy: apply local port offset when connecting via SSH\n"
+        '[ -n "${SSH_CONNECTION}" ] && export CC_PROXY_LOCAL_PORT_OFFSET=10000\n'
+    )
+
     rcfiles = []
     for name in (".bashrc", ".zshrc"):
         p = Path.home() / name
@@ -903,14 +950,15 @@ def _install_profile_linux(base_dir, hint_only):
     if not rcfiles:
         rcfiles = [Path.home() / ".bashrc"]
 
-    missing = [p for p in rcfiles if src_line not in p.read_text(errors="replace")]
+    missing_src = [p for p in rcfiles if src_line not in p.read_text(errors="replace")]
+    missing_offset = [p for p in rcfiles if ssh_offset_marker not in p.read_text(errors="replace")]
 
-    if not missing:
+    if not missing_src and not missing_offset:
         if not hint_only:
             print("[cc-proxy] Shell profile already contains cc-proxy loader.")
         return
 
-    if hint_only:
+    if hint_only and missing_src:
         print("[cc-proxy] First-time setup detected.")
         try:
             answer = input("[cc-proxy] Add loader to your shell profile now? (Y/N) ")
@@ -920,10 +968,15 @@ def _install_profile_linux(base_dir, hint_only):
             print("[cc-proxy] Skipped. Run cc_proxy_install_profile later.")
             return
 
-    for rc in missing:
+    for rc in missing_src:
         with rc.open("a") as f:
             f.write("\n{}\n".format(src_line))
         print("[cc-proxy] Added loader to {}.".format(rc))
+
+    for rc in missing_offset:
+        with rc.open("a") as f:
+            f.write("\n{}".format(ssh_offset_block))
+        print("[cc-proxy] Added SSH port offset config to {}.".format(rc))
 
     print("[cc-proxy] New terminals will auto-load helpers.")
 
@@ -931,6 +984,11 @@ def _install_profile_linux(base_dir, hint_only):
 def _install_profile_windows(base_dir, hint_only):
     script_path = base_dir / "shell" / "powershell" / "cc-proxy.ps1"
     profile_line = '. "{}"'.format(script_path)
+    ssh_offset_marker = "CC_PROXY_LOCAL_PORT_OFFSET"
+    ssh_offset_block = (
+        "# cc-proxy: apply local port offset when connecting via SSH\r\n"
+        "if ($env:SSH_CONNECTION) { $env:CC_PROXY_LOCAL_PORT_OFFSET = 10000 }\r\n"
+    )
 
     try:
         res = subprocess.run(
@@ -942,13 +1000,16 @@ def _install_profile_windows(base_dir, hint_only):
         print("[cc-proxy] Could not determine PowerShell profile path.", file=sys.stderr)
         return
 
-    already = profile_path.exists() and profile_line in profile_path.read_text(errors="replace")
-    if already:
+    profile_text = profile_path.read_text(errors="replace") if profile_path.exists() else ""
+    already_src = profile_line in profile_text
+    already_offset = ssh_offset_marker in profile_text
+
+    if already_src and already_offset:
         if not hint_only:
             print("[cc-proxy] PowerShell profile already contains cc-proxy loader.")
         return
 
-    if hint_only:
+    if hint_only and not already_src:
         print("[cc-proxy] First-time setup detected.")
         try:
             answer = input("[cc-proxy] Add loader to your PowerShell profile now? (Y/N) ")
@@ -960,8 +1021,12 @@ def _install_profile_windows(base_dir, hint_only):
 
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     with profile_path.open("a") as f:
-        f.write("\r\n{}\r\n".format(profile_line))
-    print("[cc-proxy] Added loader to {}.".format(profile_path))
+        if not already_src:
+            f.write("\r\n{}\r\n".format(profile_line))
+            print("[cc-proxy] Added loader to {}.".format(profile_path))
+        if not already_offset:
+            f.write("\r\n{}".format(ssh_offset_block))
+            print("[cc-proxy] Added SSH port offset config to {}.".format(profile_path))
 
 
 def cmd_set_secret(base_dir, secret):

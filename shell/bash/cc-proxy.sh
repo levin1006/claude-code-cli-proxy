@@ -8,7 +8,21 @@ else
   CC_PROXY_BASE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 fi
 
-_cc_proxy() { python3 "${CC_PROXY_BASE_DIR}/core/cc_proxy.py" "$@"; }
+_cc_proxy_guard_repo_run() {
+  local installed_base="$HOME/.cli-proxy"
+  if [[ "$CC_PROXY_BASE_DIR" != "$installed_base" && "${CC_PROXY_ALLOW_REPO_RUN:-}" != "1" ]]; then
+    printf '[cc-proxy] ERROR: repository execution is disabled.\n' >&2
+    printf '[cc-proxy] Run installer sync first, then load from ~/.cli-proxy/shell/bash/cc-proxy.sh\n' >&2
+    printf '[cc-proxy] (temporary override: export CC_PROXY_ALLOW_REPO_RUN=1)\n' >&2
+    return 1
+  fi
+  return 0
+}
+
+_cc_proxy() {
+  _cc_proxy_guard_repo_run || return 1
+  python3 "${CC_PROXY_BASE_DIR}/core/cc_proxy.py" "$@"
+}
 
 # Native claude (no proxy) — unsets proxy env in current shell
 cc() {
@@ -35,6 +49,11 @@ cc_proxy_install_profile() { _cc_proxy install-profile; }
 
 # Profile hint on first source
 _cc_proxy_show_profile_hint() {
+  local installed_base="$HOME/.cli-proxy"
+  if [[ "$CC_PROXY_BASE_DIR" != "$installed_base" && "${CC_PROXY_ALLOW_REPO_RUN:-}" != "1" ]]; then
+    return
+  fi
+
   local src_line="source \"${CC_PROXY_BASE_DIR}/shell/bash/cc-proxy.sh\""
   for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
     [[ -f "$rc" ]] && grep -qF "$src_line" "$rc" 2>/dev/null && return

@@ -71,20 +71,20 @@ Defined in `core/cc_proxy.py` (single source of truth, synced to both shell wrap
 
 ## Common commands
 > If your shell profile already loads these functions, use commands directly.
-> Otherwise, load first from repo root.
+> Runtime execution should be performed from installed path (`~/.cli-proxy`).
 
 ### Windows (PowerShell)
 
 #### Load helper functions (one-off shell)
 ```powershell
-. .\shell\powershell\cc-proxy.ps1
+. "~\.cli-proxy\shell\powershell\cc-proxy.ps1"
 ```
 
 > Legacy note: root one-liner URLs (`.../install.ps1`, `.../install.sh`) are intentionally unsupported. Use `installers/install.ps1` / `installers/install.sh`.
 
 #### Register helpers in PowerShell profile (recommended first-time setup)
 ```powershell
-. .\shell\powershell\cc-proxy.ps1
+. "~\.cli-proxy\shell\powershell\cc-proxy.ps1"
 Install-CCProxyProfile
 ```
 `Install-CCProxyProfile` updates `$PROFILE` and loads it into the current session immediately.
@@ -94,12 +94,12 @@ New PowerShell sessions will auto-load helpers via the profile line.
 
 #### Load helper functions (one-off shell)
 ```bash
-source shell/bash/cc-proxy.sh
+source ~/.cli-proxy/shell/bash/cc-proxy.sh
 ```
 
 #### Register helpers in shell profile (recommended first-time setup)
 ```bash
-source shell/bash/cc-proxy.sh
+source ~/.cli-proxy/shell/bash/cc-proxy.sh
 cc_proxy_install_profile
 ```
 `cc_proxy_install_profile` adds a source line to `~/.bashrc` and `~/.zshrc` (if they exist).
@@ -145,28 +145,30 @@ Swap port for other providers (`18418`, `18419`, `18420`).
 http://127.0.0.1:<provider-port>/management.html
 ```
 
-## Verification policy (important: repo vs installed)
-- Do not treat repository-source verification as installation verification.
-- **Repo verification** (`source shell/bash/cc-proxy.sh` or `. .\shell\powershell\cc-proxy.ps1`) only validates current working tree behavior.
-- **Installed verification** (`source ~/.cli-proxy/shell/bash/cc-proxy.sh` or `. "~\.cli-proxy\shell\powershell\cc-proxy.ps1"`) validates one-liner/installers output.
+## Verification policy (installed-only runtime)
+- Do not treat repository-source execution as valid runtime verification.
+- Runtime commands must be executed from installed path wrappers only:
+  - Bash: `source ~/.cli-proxy/shell/bash/cc-proxy.sh`
+  - PowerShell: `. "~\.cli-proxy\shell\powershell\cc-proxy.ps1"`
+- Repository wrappers now block execution by default; temporary bypass is possible with `CC_PROXY_ALLOW_REPO_RUN=1` only for emergency debugging.
 
-### Required 2-track verification flow
-1. **Repo track (development check)**
-   - Load repo wrapper from repository root.
-   - Run: function availability + `cc-proxy-start-all` / `cc-proxy-status` / `cc-proxy-links` / `cc-proxy-stop`.
-   - Do **not** use this track as install success evidence.
-2. **Installed track (release gate)**
-   - Use one-liner installer (`installers/install.sh` or `installers/install.ps1`) into `~/.cli-proxy`.
+### Required verification flow
+1. **Sync step (development reflection)**
+   - After editing repository files, run installer sync from repo root:
+     - Linux: `python3 installers/install.py --source local`
+     - Windows: `python installers/install.py --source local`
+2. **Installed runtime check (release gate)**
    - Open a fresh shell and load from `~/.cli-proxy/shell/...`.
-   - Re-run lifecycle and smoke checks (`/` and `/v1/models`).
+   - Run lifecycle checks: `cc-proxy-start-all` / `cc-proxy-status` / `cc-proxy-links` / `cc-proxy-stop`.
+   - Re-run smoke checks (`/` and `/v1/models`).
    - Only this track is valid evidence for deployment readiness.
 
 ### Safety rules to avoid false positives
-- Keep repo track and installed track in separate shell sessions.
 - Confirm active base dir before tests:
   - Bash: `echo "$CC_PROXY_BASE_DIR"`
   - PowerShell: `$global:CLI_PROXY_BASE_DIR`
-- In repo track, avoid profile registration commands intended for installed path (`cc_proxy_install_profile`, `Install-CCProxyProfile`) unless explicitly testing profile logic.
+- Confirm install metadata source before runtime verification:
+  - `cat ~/.cli-proxy/.install-meta.json` (or PowerShell equivalent)
 
 ## Editing guidance for future Claude instances
 - **To change model names or ports**: edit `core/cc_proxy.py` ONLY — single source of truth. Shell wrappers delegate automatically.
