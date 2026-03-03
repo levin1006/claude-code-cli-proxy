@@ -239,6 +239,43 @@ def install_binary(
     print(f"Installed canonical binary: {target_path}")
 
 
+# Commands that get shim executables in ~/.local/bin so they work in
+# non-interactive shells (watch, cron, systemd, etc.)
+SHIM_COMMANDS = [
+    ("cc-proxy-status", "status"),
+    ("cc-proxy-links",  "links"),
+    ("cc-proxy-start",  "start all"),
+    ("cc-proxy-stop",   "stop"),
+]
+
+
+def install_shims(system: str) -> None:
+    """Create thin executable shims in ~/.local/bin for non-interactive use.
+
+    Each shim calls: python3 ~/.cli-proxy/core/cc_proxy.py <subcommand> "$@"
+    This allows commands like `watch -n 1 cc-proxy-status` to work.
+    """
+    if system == "windows":
+        return  # Windows uses PowerShell functions; shims not applicable here
+
+    local_bin = Path.home() / ".local" / "bin"
+    local_bin.mkdir(parents=True, exist_ok=True)
+
+    proxy_script = INSTALL_DIR / "core" / "cc_proxy.py"
+
+    for shim_name, subcmd in SHIM_COMMANDS:
+        shim_path = local_bin / shim_name
+        shim_body = (
+            "#!/bin/sh\n"
+            f'exec python3 "{proxy_script}" {subcmd} "$@"\n'
+        )
+        shim_path.write_text(shim_body, encoding="utf-8")
+        shim_path.chmod(shim_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        print(f"  Installed shim: {shim_path}")
+
+    print(f"Installed {len(SHIM_COMMANDS)} shim(s) in {local_bin}")
+
+
 def setup_profile() -> None:
     import platform
 
@@ -347,6 +384,7 @@ def main() -> None:
 
     install_core_files(source_mode, args.repo, args.tag, local_root)
     install_binary(source_mode, args.repo, args.tag, local_root, system, platform_key)
+    install_shims(system)
 
     write_install_metadata(args.repo, args.tag, platform_key, source_mode, local_root)
     setup_profile()

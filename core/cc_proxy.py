@@ -882,6 +882,220 @@ def get_status(base_dir, provider):
     }
 
 
+def _management_api(provider, endpoint, secret="cc"):
+    """GET /v0/management/<endpoint> from a running provider proxy."""
+    import urllib.request
+    import urllib.error
+    port = PORTS[provider]
+    url = "http://{}:{}/v0/management/{}".format(HOST, port, endpoint)
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer {}".format(secret)})
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _read_secret_key(base_dir, provider):
+    """Return plaintext secret key for management API Bearer auth.
+
+    Priority:
+    1. CC_PROXY_SECRET env var (user override)
+    2. config.yaml secret-key — only if it looks like plaintext (not a bcrypt hash)
+    3. Default "cc"
+
+    The CLIProxyAPI binary rewrites the secret-key in config.yaml as a bcrypt
+    hash on startup, so config.yaml nearly always contains a hash, not the
+    plaintext.  We cannot reverse a bcrypt hash, so we fall back to "cc".
+    """
+    env_secret = os.environ.get("CC_PROXY_SECRET")
+    if env_secret:
+        return env_secret
+    config_path = get_config_file(base_dir, provider)
+    if config_path.exists():
+        text = config_path.read_text(encoding="utf-8")
+        m = re.search(r'secret-key:\s*"([^"]*)"', text)
+        if m:
+            val = m.group(1)
+            # bcrypt hashes start with $2a$, $2b$, $2y$ — not useful as Bearer token
+            if not val.startswith("$2"):
+                return val
+    return "cc"
+
+
+def _fmt_tokens(n):
+    """20484733 → '20.5M'"""
+    if n >= 1_000_000:
+        return "{:.1f}M".format(n / 1_000_000)
+    if n >= 1_000:
+        return "{:.1f}K".format(n / 1_000)
+    return str(n)
+
+
+def _time_ago(iso_str):
+    """ISO timestamp → '23m ago', '2h ago'"""
+    dt = _parse_iso(iso_str)
+    if not dt:
+        return ""
+    now = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    delta = (now - dt).total_seconds()
+    if delta < 60:
+        return "just now"
+    if delta < 3600:
+        return "{}m ago".format(int(delta / 60))
+    if delta < 86400:
+        return "{}h ago".format(int(delta / 3600))
+    return "{}d ago".format(int(delta / 86400))
+
+
+def _box_line(text, width):
+    """║  text    ║ 형태로 패딩"""
+    inner = text[: width - 4]
+    return "\u2551 {:<{}} \u2551".format(inner, width - 4)
+
+
+def _box_top(width):
+    return "\u2554" + "\u2550" * (width - 2) + "\u2557"
+
+
+def _box_bottom(width):
+    return "\u255a" + "\u2550" * (width - 2) + "\u255d"
+
+
+def _box_sep(width):
+    return "\u2560" + "\u2550" * (width - 2) + "\u2563"
+
+
+def _aggregate_per_account(usage_data):
+    """Aggregate usage stats per account from /v0/management/usage response."""
+    account_stats = {}
+    for api_data in usage_data.get("usage", {}).get("apis", {}).values():
+        for model_data in api_data.get("models", {}).values():
+            for detail in model_data.get("details", []):
+                src = detail.get("source", "unknown")
+                tok = detail.get("tokens", {}).get("total_tokens", 0)
+                if src not in account_stats:
+                    account_stats[src] = {"requests": 0, "tokens": 0}
+                account_stats[src]["requests"] += 1
+                account_stats[src]["tokens"] += tok
+    return account_stats
+
+
+def _print_status_dashboard(base_dir, provider, status, W):
+    """Print rich dashboard panel for a provider."""
+    running = status["running"]
+    healthy = status["healthy"]
+    port = PORTS[provider]
+    dot = "\u25cf" if running else "\u25cb"
+    state = "running" if running else "stopped"
+
+    # --- fetch management data if running ---
+    auth_data = None
+    usage_data = None
+    if running and healthy:
+        try:
+            secret = _read_secret_key(base_dir, provider)
+            auth_data = _management_api(provider, "auth-files", secret)
+            usage_data = _management_api(provider, "usage", secret)
+        except Exception:
+            pass
+
+    files = auth_data.get("files", []) if auth_data else []
+    acct_suffix = "  {} accounts".format(len(files)) if files else ""
+    header = "  {}  :{}   {} {}{}".format(provider, port, dot, state, acct_suffix)
+    print(_box_sep(W))
+    print(_box_line(header, W))
+
+    # No data to display: compact view
+    u = usage_data.get("usage", {}) if usage_data else {}
+    has_data = bool(files or u.get("total_requests", 0))
+    if not running or not healthy or not has_data:
+        return
+
+    # --- accounts section ---
+    print(_box_line("", W))
+    print(_box_line("  Accounts", W))
+    divider = "  " + "\u2500" * (W - 6)
+    print(_box_line(divider, W))
+    for f in files:
+        email = f.get("email", f.get("name", "?"))
+        disabled = f.get("disabled", False)
+        acct_status = "disabled" if disabled else "active"
+        last_refresh = f.get("last_refresh") or f.get("lastRefresh") or ""
+        refreshed = ("refreshed " + _time_ago(last_refresh)) if last_refresh else ""
+        # content=64: "  " + email[:30] + "  " + status[:8] + "  " + refreshed[:20-len]
+        row = "  {:<30}  {:<8}  {}".format(email[:30], acct_status, refreshed[:20])
+        print(_box_line(row, W))
+
+    # --- usage section ---
+    total_req = u.get("total_requests", 0)
+    ok_req = u.get("success_count", 0)
+    fail_req = u.get("failure_count", 0)
+    total_tok = u.get("total_tokens", 0)
+
+    print(_box_line("", W))
+    print(_box_line("  Usage", W))
+    print(_box_line(divider, W))
+
+    summary = "  Total: {} requests ({} ok, {} fail)  \u00b7  {} tokens".format(
+        total_req, ok_req, fail_req, _fmt_tokens(total_tok)
+    )
+    print(_box_line(summary, W))
+
+    # Models
+    apis = u.get("apis", {})
+    model_stats = {}
+    for api_data in apis.values():
+        for model_name, model_data in api_data.get("models", {}).items():
+            details = model_data.get("details", [])
+            req_count = len(details)
+            tok_count = sum(d.get("tokens", {}).get("total_tokens", 0) for d in details)
+            if model_name not in model_stats:
+                model_stats[model_name] = {"requests": 0, "tokens": 0}
+            model_stats[model_name]["requests"] += req_count
+            model_stats[model_name]["tokens"] += tok_count
+
+    if model_stats:
+        print(_box_line("", W))
+        print(_box_line("  Models:", W))
+        for mname, mdata in sorted(model_stats.items(), key=lambda x: -x[1]["tokens"]):
+            # content=64: "    " + name[:32] + "  " + count(5) + " req  " + tok(8) + " tokens"
+            # = 4+32+2+5+6+8+7 = 64
+            row = "    {:<32}  {:>5} req  {:>8} tokens".format(
+                mname[:32], mdata["requests"], _fmt_tokens(mdata["tokens"])
+            )
+            print(_box_line(row, W))
+
+    # Daily stats
+    requests_by_day = u.get("requests_by_day", {})
+    tokens_by_day = u.get("tokens_by_day", {})
+    all_days = sorted(set(list(requests_by_day.keys()) + list(tokens_by_day.keys())))
+    if all_days:
+        print(_box_line("", W))
+        print(_box_line("  Daily:", W))
+        for day in all_days[-7:]:
+            day_req = requests_by_day.get(day, 0)
+            day_tok = tokens_by_day.get(day, 0)
+            # content=64: "    " + day(10) + "  " + count(6) + " req  " + tok(8) + " tokens"
+            # = 4+10+2+6+6+8+7 = 43
+            row = "    {}  {:>6} req  {:>8} tokens".format(day, day_req, _fmt_tokens(day_tok))
+            print(_box_line(row, W))
+
+    # Per-account stats
+    acct_stats = _aggregate_per_account(usage_data)
+    if acct_stats:
+        print(_box_line("", W))
+        print(_box_line("  Per-account:", W))
+        for acct, adata in sorted(acct_stats.items(), key=lambda x: -x[1]["tokens"]):
+            # content=64: "    " + email[:28] + "  " + count(5) + " req  " + tok(8) + " tokens"
+            # = 4+28+2+5+6+8+7 = 60
+            row = "    {:<28}  {:>5} req  {:>8} tokens".format(
+                acct[:28], adata["requests"], _fmt_tokens(adata["tokens"])
+            )
+            print(_box_line(row, W))
+
+    print(_box_line("", W))
+
+
 def run_auth(base_dir, provider):
     exe = get_binary_path(base_dir)
     if not exe.exists():
@@ -1125,22 +1339,16 @@ def main():
         if provider and provider not in PROVIDERS:
             print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
             return 1
-        print("[cc-proxy] Status:")
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        W = 68
+        print(_box_top(W))
+        title = "  cc-proxy status"
+        padding = W - 4 - len(title) - len(now_str)
+        print(_box_line(title + " " * max(1, padding) + now_str, W))
         for pvd in targets:
             s = get_status(base_dir, pvd)
-            pid_str = str(s["pid"]) if s["pid"] else "-"
-            running_str = "Running" if s["running"] else "Stopped"
-            healthy_str = str(s["healthy"])
-            print("  {:<14}  {:<8}  PID={:<7}  Healthy={:<5}  {}".format(
-                pvd, running_str, pid_str, healthy_str, s["url"]))
-            if s["tokens"]:
-                for t in s["tokens"]:
-                    label = t["email"] or t["file"]
-                    status = t["status"]
-                    marker = "  [expired]" if "expired" in status else ""
-                    print("    Token: {:<40}  {}{}".format(label, status, marker))
-            else:
-                print("    Token: (none — run: cc-proxy-auth {})".format(pvd))
+            _print_status_dashboard(base_dir, pvd, s, W)
+        print(_box_bottom(W))
         return 0
 
     elif cmd == "links":
