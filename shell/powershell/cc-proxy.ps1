@@ -10,7 +10,19 @@ $script:_CC_PROXY_PY     = if (Get-Command py      -ErrorAction SilentlyContinue
                           else { "python" }
 $script:_CC_PROXY_SCRIPT = Join-Path $global:CLI_PROXY_BASE_DIR "core\cc_proxy.py"
 
-function _cc_proxy { & $script:_CC_PROXY_PY $script:_CC_PROXY_SCRIPT @args }
+function _cc_proxy_guard_repo_run {
+  $installedBase = Join-Path $HOME ".cli-proxy"
+  if ($global:CLI_PROXY_BASE_DIR -ne $installedBase -and $env:CC_PROXY_ALLOW_REPO_RUN -ne "1") {
+    Write-Error "[cc-proxy] repository execution is disabled. Run installer sync first, then load from ~/.cli-proxy/shell/powershell/cc-proxy.ps1 (temporary override: `$env:CC_PROXY_ALLOW_REPO_RUN='1')."
+    return $false
+  }
+  return $true
+}
+
+function _cc_proxy {
+  if (-not (_cc_proxy_guard_repo_run)) { return }
+  & $script:_CC_PROXY_PY $script:_CC_PROXY_SCRIPT @args
+}
 
 # Native claude (no proxy) — removes proxy env vars from parent session
 function cc {
@@ -40,6 +52,11 @@ function Install-CCProxyProfile { _cc_proxy install-profile }
 
 # Profile hint on first dot-source
 function Show-CCProxyProfileSetupHint {
+  $installedBase = Join-Path $HOME ".cli-proxy"
+  if ($global:CLI_PROXY_BASE_DIR -ne $installedBase -and $env:CC_PROXY_ALLOW_REPO_RUN -ne "1") {
+    return
+  }
+
   $profileLine = ". `"$(Join-Path $global:CLI_PROXY_BASE_DIR 'shell\powershell\cc-proxy.ps1')`""
   if (Test-Path $PROFILE) {
     $c = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue

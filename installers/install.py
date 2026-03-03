@@ -1,11 +1,12 @@
 import argparse
 import json
+import shutil
 import stat
 import sys
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 # --- Configuration ---
 MIN_PYTHON_VERSION = (3, 8)
@@ -88,6 +89,44 @@ def raw_tag_url(repo: str, tag: str, relative_path: str) -> str:
     return f"https://raw.githubusercontent.com/{repo}/{tag}/{relative_path}"
 
 
+def is_local_source_tree(root: Path) -> bool:
+    required = [
+        root / "config.yaml",
+        root / "core" / "cc_proxy.py",
+        root / "shell" / "bash" / "cc-proxy.sh",
+        root / "shell" / "powershell" / "cc-proxy.ps1",
+    ]
+    return all(path.exists() for path in required)
+
+
+def resolve_source_mode(source: str, local_path: Optional[str]) -> Tuple[str, Optional[Path]]:
+    if source == "remote":
+        return "remote", None
+
+    if local_path:
+        candidate = Path(local_path).expanduser().resolve()
+        if not is_local_source_tree(candidate):
+            print(f"Error: --local-path does not look like a valid repo root: {candidate}")
+            sys.exit(1)
+        return "local", candidate
+
+    inferred = Path(__file__).resolve().parent.parent
+
+    if source == "local":
+        if is_local_source_tree(inferred):
+            return "local", inferred
+        print("Error: local source mode requested but repo root could not be inferred.")
+        print("Hint: rerun with --local-path <repo-root>.")
+        sys.exit(1)
+
+    if source == "auto":
+        if is_local_source_tree(inferred):
+            return "local", inferred
+        return "remote", None
+
+    return "remote", None
+
+
 def normalize_system_and_arch() -> Tuple[str, str]:
     import platform
 
@@ -118,14 +157,45 @@ def normalize_system_and_arch() -> Tuple[str, str]:
     return system, platform_key
 
 
-def download_core_files(repo: str, tag: str) -> None:
+def copy_local_file(source_path: Path, target_path: Path) -> None:
+    print(f"Copying {source_path} ...")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copy2(source_path, target_path)
+        print(f"  -> Saved to {target_path}")
+    except Exception as exc:
+        print(f"Error copying {source_path}: {exc}")
+        sys.exit(1)
+
+
+def install_core_files(
+    source_mode: str,
+    repo: str,
+    tag: str,
+    local_root: Optional[Path],
+) -> None:
     for local_path, repo_path in CORE_FILES.items():
-        url = raw_tag_url(repo, tag, repo_path)
         target = INSTALL_DIR / local_path
-        download_file(url, target)
+        if source_mode == "local":
+            assert local_root is not None
+            source = local_root / repo_path
+            if not source.exists():
+                print(f"Error: missing local source file: {source}")
+                sys.exit(1)
+            copy_local_file(source, target)
+        else:
+            url = raw_tag_url(repo, tag, repo_path)
+            download_file(url, target)
 
 
-def download_binary(repo: str, tag: str, system: str, platform_key: str) -> None:
+def install_binary(
+    source_mode: str,
+    repo: str,
+    tag: str,
+    local_root: Optional[Path],
+    system: str,
+    platform_key: str,
+) -> None:
     relative_path = BINARY_PATHS.get(platform_key)
     if not relative_path:
         print(
@@ -134,12 +204,20 @@ def download_binary(repo: str, tag: str, system: str, platform_key: str) -> None
         )
         sys.exit(1)
 
-    binary_url = raw_tag_url(repo, tag, relative_path)
     canonical_name = CANONICAL_BINARY_NAME[system]
     target_path = INSTALL_DIR / canonical_name
     temp_target = INSTALL_DIR / f".{canonical_name}.tmp"
 
-    download_file(binary_url, temp_target)
+    if source_mode == "local":
+        assert local_root is not None
+        source_binary = local_root / relative_path
+        if not source_binary.exists():
+            print(f"Error: missing local binary for platform {platform_key}: {source_binary}")
+            sys.exit(1)
+        copy_local_file(source_binary, temp_target)
+    else:
+        binary_url = raw_tag_url(repo, tag, relative_path)
+        download_file(binary_url, temp_target)
 
     if system == "linux":
         temp_target.chmod(temp_target.stat().st_mode | stat.S_IEXEC)
@@ -196,7 +274,13 @@ def setup_profile() -> None:
     print("Or restart your terminal.")
 
 
-def write_install_metadata(repo: str, tag: str, platform_key: str) -> None:
+def write_install_metadata(
+    repo: str,
+    tag: str,
+    platform_key: str,
+    source_mode: str,
+    local_root: Optional[Path],
+) -> None:
     now_iso = datetime.now(timezone.utc).isoformat()
 
     meta: Dict[str, Any] = {
@@ -205,8 +289,11 @@ def write_install_metadata(repo: str, tag: str, platform_key: str) -> None:
         "platform": platform_key,
         "installed_at_utc": now_iso,
         "install_dir": str(INSTALL_DIR),
-        "binary_source": "repo-tag-raw",
+        "source_mode": source_mode,
+        "binary_source": "local-tree-copy" if source_mode == "local" else "repo-tag-raw",
     }
+    if local_root is not None:
+        meta["local_source_root"] = str(local_root)
 
     INSTALL_META_JSON.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     INSTALLED_TAG_FILE.write_text(f"{tag}\n", encoding="utf-8")
@@ -215,7 +302,7 @@ def write_install_metadata(repo: str, tag: str, platform_key: str) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Install cli-proxy runtime from repository tag")
+    parser = argparse.ArgumentParser(description="Install cli-proxy runtime from repository tag or local source")
     parser.add_argument(
         "--tag",
         default=DEFAULT_TAG,
@@ -225,6 +312,17 @@ def parse_args() -> argparse.Namespace:
         "--repo",
         default=DEFAULT_REPO,
         help="GitHub repository in owner/name form",
+    )
+    parser.add_argument(
+        "--source",
+        choices=["remote", "local", "auto"],
+        default="auto",
+        help="Install source: remote (GitHub tag), local (filesystem copy), or auto (prefer local when detectable)",
+    )
+    parser.add_argument(
+        "--local-path",
+        default="",
+        help="Local repo root for --source local/auto. If omitted, infer from installers/install.py location.",
     )
     return parser.parse_args()
 
@@ -237,13 +335,20 @@ def main() -> None:
     create_directories()
 
     system, platform_key = normalize_system_and_arch()
-    print(f"Using repository ref: {args.tag}")
+
+    source_mode, local_root = resolve_source_mode(args.source, args.local_path)
+
+    if source_mode == "local":
+        print(f"Using local source tree: {local_root}")
+    else:
+        print(f"Using repository ref: {args.tag}")
+
     print(f"Detected platform: {platform_key}")
 
-    download_core_files(args.repo, args.tag)
-    download_binary(args.repo, args.tag, system, platform_key)
+    install_core_files(source_mode, args.repo, args.tag, local_root)
+    install_binary(source_mode, args.repo, args.tag, local_root, system, platform_key)
 
-    write_install_metadata(args.repo, args.tag, platform_key)
+    write_install_metadata(args.repo, args.tag, platform_key, source_mode, local_root)
     setup_profile()
     print("\n✅ Installation complete!")
 
