@@ -947,10 +947,26 @@ def _time_ago(iso_str):
     return "{}d ago".format(int(delta / 86400))
 
 
+# ANSI color codes (empty string fallback keeps output clean when piped)
+_C_GREEN  = "\033[32m"
+_C_RED    = "\033[31m"
+_C_DIM    = "\033[2m"
+_C_BOLD   = "\033[1m"
+_C_RESET  = "\033[0m"
+
+
+def _visible_len(s):
+    """ANSI escape를 제거한 실제 보이는 문자 길이."""
+    return len(re.sub(r"\033\[[0-9;]*m", "", s))
+
+
 def _box_line(text, width):
-    """║  text    ║ 형태로 패딩"""
-    inner = text[: width - 4]
-    return "\u2551 {:<{}} \u2551".format(inner, width - 4)
+    """║  text    ║ 형태로 패딩. ANSI escape 코드가 포함된 text도 정확히 정렬."""
+    ansi_extra = len(text) - _visible_len(text)
+    max_visible = width - 4
+    inner = text[: max_visible + ansi_extra]
+    pad = max_visible - _visible_len(inner)
+    return "\u2551 {}{} \u2551".format(inner, " " * max(0, pad))
 
 
 def _box_top(width):
@@ -985,8 +1001,13 @@ def _print_status_dashboard(base_dir, provider, status, W):
     running = status["running"]
     healthy = status["healthy"]
     port = PORTS[provider]
-    dot = "\u25cf" if running else "\u25cb"
-    state = "running" if running else "stopped"
+
+    if running:
+        dot_str = _C_GREEN + "\u25cf" + _C_RESET
+        state_str = "running"
+    else:
+        dot_str = _C_DIM + "\u25cb" + _C_RESET
+        state_str = _C_DIM + "stopped" + _C_RESET
 
     # --- fetch management data if running ---
     auth_data = None
@@ -1001,7 +1022,7 @@ def _print_status_dashboard(base_dir, provider, status, W):
 
     files = auth_data.get("files", []) if auth_data else []
     acct_suffix = "  {} accounts".format(len(files)) if files else ""
-    header = "  {}  :{}   {} {}{}".format(provider, port, dot, state, acct_suffix)
+    header = "  {}  :{}   {} {}{}".format(provider, port, dot_str, state_str, acct_suffix)
     print(_box_sep(W))
     print(_box_line(header, W))
 
@@ -1019,11 +1040,12 @@ def _print_status_dashboard(base_dir, provider, status, W):
     for f in files:
         email = f.get("email", f.get("name", "?"))
         disabled = f.get("disabled", False)
-        acct_status = "disabled" if disabled else "active"
-        last_refresh = f.get("last_refresh") or f.get("lastRefresh") or ""
-        refreshed = ("refreshed " + _time_ago(last_refresh)) if last_refresh else ""
-        # content=64: "  " + email[:30] + "  " + status[:8] + "  " + refreshed[:20-len]
-        row = "  {:<30}  {:<8}  {}".format(email[:30], acct_status, refreshed[:20])
+        if disabled:
+            acct_status = _C_RED + "disabled" + _C_RESET
+        else:
+            acct_status = _C_GREEN + "active" + _C_RESET
+        # content=64: "  " + email[:44) + "  " + status(visible=8)
+        row = "  {:<44}  {}".format(email[:44], acct_status)
         print(_box_line(row, W))
 
     # --- usage section ---
@@ -1036,8 +1058,12 @@ def _print_status_dashboard(base_dir, provider, status, W):
     print(_box_line("  Usage", W))
     print(_box_line(divider, W))
 
-    summary = "  Total: {} requests ({} ok, {} fail)  \u00b7  {} tokens".format(
-        total_req, ok_req, fail_req, _fmt_tokens(total_tok)
+    fail_str = (
+        _C_RED + "{} fail".format(fail_req) + _C_RESET if fail_req > 0
+        else "{} fail".format(fail_req)
+    )
+    summary = "  Total: {} requests ({} ok, {})  \u00b7  {} tokens".format(
+        total_req, ok_req, fail_str, _fmt_tokens(total_tok)
     )
     print(_box_line(summary, W))
 
@@ -1086,10 +1112,10 @@ def _print_status_dashboard(base_dir, provider, status, W):
         print(_box_line("", W))
         print(_box_line("  Per-account:", W))
         for acct, adata in sorted(acct_stats.items(), key=lambda x: -x[1]["tokens"]):
-            # content=64: "    " + email[:28] + "  " + count(5) + " req  " + tok(8) + " tokens"
-            # = 4+28+2+5+6+8+7 = 60
-            row = "    {:<28}  {:>5} req  {:>8} tokens".format(
-                acct[:28], adata["requests"], _fmt_tokens(adata["tokens"])
+            # content=64: "    " + email[:32] + "  " + count(5) + " req  " + tok(8) + " tokens"
+            # = 4+32+2+5+6+8+7 = 64
+            row = "    {:<32}  {:>5} req  {:>8} tokens".format(
+                acct[:32], adata["requests"], _fmt_tokens(adata["tokens"])
             )
             print(_box_line(row, W))
 
