@@ -11,8 +11,9 @@ configs/*/config.yaml
 # PID files (Linux process tracking)
 configs/*/.proxy.pid
 
-# Management UI assets
+# Management UI assets (바이너리가 런타임에 자동 생성)
 configs/*/static/
+static/
 
 # Python bytecode cache
 core/__pycache__/
