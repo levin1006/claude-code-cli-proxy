@@ -246,7 +246,7 @@ def get_local_port_offset():
             return int(raw)
         except ValueError:
             return 0
-    return 10000 if is_ssh_session() else 0
+    return 0
 
 
 def get_management_port(provider):
@@ -255,6 +255,10 @@ def get_management_port(provider):
 
 def get_management_url(provider):
     return "http://{}:{}/management.html#/quota".format(HOST, get_management_port(provider))
+
+
+def get_dashboard_link_port():
+    return 18500 + get_local_port_offset()
 
 
 def get_dashboard_file_path():
@@ -306,6 +310,12 @@ def stop_dashboard_server():
         time.sleep(0.1)
         stopped = True
 
+    dashboard_pid = resolve_pid_by_port(get_dashboard_link_port())
+    if dashboard_pid and is_pid_alive(dashboard_pid):
+        kill_pid(dashboard_pid)
+        time.sleep(0.1)
+        stopped = True
+
     _remove_dashboard_server_state()
     return stopped
 
@@ -321,16 +331,13 @@ def _is_dashboard_server_alive(port):
 
 
 def _start_dashboard_server(dashboard_path):
-    preferred_port = 18500 + get_local_port_offset()
+    preferred_port = get_dashboard_link_port()
     script = (
         "import functools, http.server, socketserver\n"
         "handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=r'{}')\n"
         "class MyServer(socketserver.TCPServer):\n"
         "    allow_reuse_address = True\n"
-        "try:\n"
-        "    httpd = MyServer(('127.0.0.1', {}), handler)\n"
-        "except OSError:\n"
-        "    httpd = MyServer(('127.0.0.1', 0), handler)\n"
+        "httpd = MyServer(('127.0.0.1', {}), handler)\n"
         "print(httpd.server_address[1], flush=True)\n"
         "httpd.serve_forever()\n"
     ).format(str(dashboard_path.parent), preferred_port)
@@ -394,15 +401,19 @@ def get_dashboard_data_url():
 
 def get_dashboard_http_url():
     dashboard_path = get_dashboard_file_path()
-    state = _read_dashboard_server_state()
-    port = state.get("port")
+    preferred_port = get_dashboard_link_port()
 
-    if _is_dashboard_server_alive(port):
-        return "http://{}:{}/{}".format(HOST, int(port), dashboard_path.name)
+    if _is_dashboard_server_alive(preferred_port):
+        return "http://{}:{}/{}".format(HOST, preferred_port, dashboard_path.name)
 
     port = _start_dashboard_server(dashboard_path)
     if port:
         return "http://{}:{}/{}".format(HOST, int(port), dashboard_path.name)
+
+    print(
+        "[cc-proxy] WARNING: Dashboard link server must use fixed port {} (already in use).".format(preferred_port),
+        file=sys.stderr,
+    )
 
     if is_ssh_session():
         return get_dashboard_data_url()
