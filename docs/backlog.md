@@ -48,5 +48,10 @@
 
 - [ ] 파일(토큰) 열람 및 삭제 기능
 
+- [ ] quota 캐싱 (TTL 10초)
+  - `--quota` 결과를 임시 파일(`/tmp/cc-proxy-quota-<provider>.json`)에 저장
+  - 10초 이내 재호출 시 캐시 사용 → `watch -n 10 cc-proxy-status --quota` 안전하게 사용 가능
+  - 캐시 만료 시 백그라운드 refresh 또는 동기 재fetch
+
 - [ ] --short / -s 압축 뷰
   - 헤더 한 줄만 표시 (usage 세부 없이)
