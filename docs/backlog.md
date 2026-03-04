@@ -32,7 +32,7 @@
   - 진행바 (10칸) + 리셋 시간 표시, 색상 구분 (≥80% 기본 / 40-79% 노랑 / <40% 빨강)
   - cc-proxy-check alias → cc-proxy-status --check, 신규 cc-proxy-quota alias 추가
 
-- [ ] quota에서 위가 5h 아래가 7d로 통일 (일부 7d가 5h 위에 있는 경우가 있음)
+- [x] quota에서 위가 5h 아래가 7d로 통일 (일부 7d가 5h 위에 있는 경우가 있음)
 
 - [x] use interface (provider 브라우징)
   - `cc-proxy-ui` 인터랙티브 화면 추가 (provider/account 브라우징)
