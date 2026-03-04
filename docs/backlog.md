@@ -35,7 +35,6 @@
 - [ ] use interface (provider 브라우징)
   - 공간이 넓어졌으므로 status의 quota와 available model을 한 화면으로 통합. account validation은 기존 accounts 항목과 겹치므로 통합. 
 
-
 - [ ] cc-proxy-stop 시 usage 데이터 손실 문제
   - CLIProxyAPI 바이너리 수준 이슈, hot-reload 불가
   - 가능한 우회: stop 전 usage 스냅샷 저장?
@@ -53,5 +52,9 @@
   - 60초 이내 재호출 시 upstream API 생략 → rate limit 방지
   - `watch -n 10 cc-proxy-quota` 수준의 polling 안전하게 사용 가능
 
-- [ ] --short / -s 압축 뷰
-  - 헤더 한 줄만 표시 (usage 세부 없이)
+- [x] --short / -s 압축 뷰
+  - provider당 1행: 이름 · 포트 · running/stopped · accts · req · tok
+  - `cc-proxy-short` alias 추가 (bash/powershell)
+  - `watch -n 1 cc-proxy-short` 으로 빠른 전체 모니터링 가능
+
+- [ ] provider 선택 출력: 현재 전체 provider를 출력하거나 단일 출력만 가능한데 두개 이상도 선택한 것만 출력 가능하도록

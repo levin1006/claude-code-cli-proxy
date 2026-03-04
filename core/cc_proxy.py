@@ -1861,7 +1861,8 @@ def main():
         rest = args[1:]
         show_quota = "--quota" in rest
         show_check = (cmd == "check") or ("--check" in rest)
-        positional = [a for a in rest if not a.startswith("--")]
+        show_short = "--short" in rest or "-s" in rest
+        positional = [a for a in rest if not a.startswith("--") and a != "-s"]
         provider = positional[0] if positional else None
         if provider and provider not in PROVIDERS:
             print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
@@ -1896,25 +1897,54 @@ def main():
                 min_content = max(min_content, len(email) + 24)
         W = max(min_content + 4, min(term_w - 2, 120))
 
-        flags = ("--quota " if show_quota else "") + ("--check" if show_check else "")
+        flags = ("--quota " if show_quota else "") + ("--check" if show_check else "") + ("-s" if show_short else "")
         title = "  cc-proxy status {}".format(flags).rstrip()
-        print(_box_top(W))
-        padding = W - 4 - len(title) - len(now_str)
-        print(_box_line(title + " " * max(1, padding) + now_str, W))
-        for pvd in targets:
-            data = prefetched.get(pvd, {})
-            s = data.get("status") or get_status(base_dir, pvd)
-            _print_status_dashboard(
-                base_dir, pvd, s, W,
-                auth_data=data.get("auth_data"),
-                usage_data=data.get("usage_data"),
-                auth_error=data.get("auth_error", False),
-                models_per_account=data.get("models_per_account"),
-                quota_data=data.get("quota_data") if show_quota else None,
-                proxy_models=data.get("proxy_models"),
-                show_check=show_check,
-            )
-        print(_box_bottom(W))
+
+        if show_short:
+            # Compact: one summary line per provider
+            W = max(72, min(term_w - 2, 120))
+            print(_box_top(W))
+            padding = W - 4 - len(title) - len(now_str)
+            print(_box_line(title + " " * max(1, padding) + now_str, W))
+            print(_box_sep(W))
+            for pvd in targets:
+                data   = prefetched.get(pvd, {})
+                s      = data.get("status") or get_status(base_dir, pvd)
+                port   = PORTS[pvd]
+                files  = (data.get("auth_data") or {}).get("files", [])
+                n_acct = len(files)
+                u      = (data.get("usage_data") or {}).get("usage", {})
+                t_req  = u.get("total_requests", 0)
+                t_tok  = _fmt_tokens(u.get("total_tokens", 0))
+                if s.get("running"):
+                    dot   = _C_GREEN + "\u25cf" + _C_RESET
+                    state = "running"
+                else:
+                    dot   = _C_DIM + "\u25cb" + _C_RESET
+                    state = "stopped"
+                row = "  {:<13} :{:5d}  {} {:<7}  {:>2} accts  {:>5} req  {:>6} tok".format(
+                    pvd, port, dot, state, n_acct, t_req, t_tok
+                )
+                print(_box_line(row, W))
+            print(_box_bottom(W))
+        else:
+            print(_box_top(W))
+            padding = W - 4 - len(title) - len(now_str)
+            print(_box_line(title + " " * max(1, padding) + now_str, W))
+            for pvd in targets:
+                data = prefetched.get(pvd, {})
+                s = data.get("status") or get_status(base_dir, pvd)
+                _print_status_dashboard(
+                    base_dir, pvd, s, W,
+                    auth_data=data.get("auth_data"),
+                    usage_data=data.get("usage_data"),
+                    auth_error=data.get("auth_error", False),
+                    models_per_account=data.get("models_per_account"),
+                    quota_data=data.get("quota_data") if show_quota else None,
+                    proxy_models=data.get("proxy_models"),
+                    show_check=show_check,
+                )
+            print(_box_bottom(W))
         return 0
 
     elif cmd == "links":
