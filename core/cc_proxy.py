@@ -1483,33 +1483,44 @@ def _print_status_dashboard(base_dir, provider, status, W,
     print(_box_line("  Accounts", W))
     divider = "  " + "\u2500" * (W - 6)
     print(_box_line(divider, W))
+    all_ok = True
     for f in files:
         email = f.get("email", f.get("name", "?"))
         name  = f.get("name", "")
         last_refresh = f.get("last_refresh", "")
         plan_type = (f.get("id_token") or {}).get("plan_type", "")
         time_str = _time_ago(last_refresh) if last_refresh else ""
-        _ind, acct_status, _deg = _acct_status_label(f)
+        model_list = models_per_account.get(name) if models_per_account else None
+        mc_str = "       \u2014" if model_list is None else (
+            "{:>2} models".format(len(model_list)) if len(model_list) > 0 else " 0 models"
+        )
+        indicator, acct_status, is_degraded = _acct_status_label(f)
 
         # Override: proxy-active but 0 models → not in routing pool
-        if (models_per_account is not None
-                and not f.get("disabled", False)
+        if (not f.get("disabled", False)
                 and f.get("status", "") not in ("error",)
-                and not f.get("unavailable", False)):
-            ml = models_per_account.get(name)
-            if ml is not None and len(ml) == 0:
-                acct_status = _C_DIM + "no models" + _C_RESET
+                and not f.get("unavailable", False)
+                and model_list is not None
+                and len(model_list) == 0):
+            indicator = _C_DIM + "\u26a0" + _C_RESET
+            acct_status = _C_DIM + "no models" + _C_RESET
+            is_degraded = True
+
+        if is_degraded:
+            all_ok = False
 
         label = email
         if plan_type:
             suffix = " [{}]".format(plan_type)
-            label = email[:max(0, 28 - len(suffix))] + suffix
+            label = email[:max(0, 26 - len(suffix))] + suffix
         if selected_account_key:
             is_selected = (_account_identity(f) == selected_account_key)
         else:
             is_selected = bool(selected_account_name and name == selected_account_name)
         cursor = "▸" if is_selected else " "
-        row = "{} {:<34}  {:>8}  {}".format(cursor, label[:34], time_str, acct_status)
+        row = "{} {:<26}  {:>9}  {:>8}  {} {}".format(
+            cursor, label[:26], mc_str, time_str, indicator, acct_status
+        )
         print(_box_line(row, W))
 
     # --- usage section ---
@@ -1661,40 +1672,7 @@ def _print_status_dashboard(base_dir, provider, status, W,
 
     # --- check section (shown when --check flag used) ---
     if show_check:
-        print(_box_line("", W))
         cdiv = "  " + "\u2500" * (W - 6)
-        print(_box_line("  Account Validation", W))
-        print(_box_line(cdiv, W))
-        all_ok = True
-        for f in files:
-            email = f.get("email", f.get("name", "?"))
-            name = f.get("name", "")
-            last_refresh = f.get("last_refresh", "")
-            plan_type = (f.get("id_token") or {}).get("plan_type", "")
-            time_str = _time_ago(last_refresh) if last_refresh else ""
-            model_list = models_per_account.get(name) if models_per_account else None
-            mc_str = "       \u2014" if model_list is None else (
-                "{:>2} models".format(len(model_list)) if len(model_list) > 0 else " 0 models"
-            )
-            indicator, st_str, is_degraded = _acct_status_label(f)
-            if (not f.get("disabled", False)
-                    and f.get("status", "") not in ("error",)
-                    and not f.get("unavailable", False)
-                    and model_list is not None
-                    and len(model_list) == 0):
-                indicator = _C_DIM + "\u26a0" + _C_RESET
-                st_str = _C_DIM + "no models" + _C_RESET
-                is_degraded = True
-            if is_degraded:
-                all_ok = False
-            label = email
-            if plan_type:
-                suffix = " [{}]".format(plan_type)
-                label = email[:max(0, 26 - len(suffix))] + suffix
-            row = "  {:<26}  {:>9}  {:>8}  {} {}".format(
-                label[:26], mc_str, time_str, indicator, st_str
-            )
-            print(_box_line(row, W))
         print(_box_line("", W))
         if not files:
             verdict = "  No accounts configured"
