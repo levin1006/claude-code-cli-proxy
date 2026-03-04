@@ -47,6 +47,7 @@ function cc-proxy-status     { _cc_proxy status        @args }
 function cc-proxy-check      { _cc_proxy status --check @args }  # alias → status --check
 function cc-proxy-quota      { _cc_proxy status --quota @args }
 function cc-proxy-short      { _cc_proxy status -s      @args }  # compact one-line-per-provider
+function cc-proxy-ui         { _cc_proxy ui            @args }
 function cc-proxy-links      { _cc_proxy links      @args }
 function cc-proxy-stop       { _cc_proxy stop       @args }
 function cc-proxy-auth       { _cc_proxy auth       @args }

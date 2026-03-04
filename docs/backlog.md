@@ -32,12 +32,25 @@
   - 진행바 (10칸) + 리셋 시간 표시, 색상 구분 (≥80% 기본 / 40-79% 노랑 / <40% 빨강)
   - cc-proxy-check alias → cc-proxy-status --check, 신규 cc-proxy-quota alias 추가
 
-- [ ] use interface (provider 브라우징)
-  - 공간이 넓어졌으므로 status의 quota와 available model을 한 화면으로 통합. account validation은 기존 accounts 항목과 겹치므로 통합. 
+- [ ] quota에서 위가 5h 아래가 7d로 통일 (일부 7d가 5h 위에 있는 경우가 있음)
+
+- [x] use interface (provider 브라우징)
+  - `cc-proxy-ui` 인터랙티브 화면 추가 (provider/account 브라우징)
+  - status의 quota + account validation + available model을 한 화면에서 확인 가능
+
+- [x] cli ui를 통해 방향키로 이동하여 계정 on/off 시키는 기능
+  - 키맵: ←/→ provider, ↑/↓ account, space toggle, r refresh, 1-4 jump, q quit
+  - 토글 안정화: 선택된 account의 path JSON 직접 수정 + atomic write(tmp→replace)
+  - 토글 반영: provider 재시작으로 확정 반영 (quiet 모드)
+  - UI 안정화: 토글 진행 로그를 박스 하단 메시지바로 통합 (외부 로그 출력 억제)
+  - 렌더링 안정화: ANSI/CJK 폭 기준 박스 정렬 보정으로 메시지 변경 시 깨짐 방지
 
 - [ ] cc-proxy-stop 시 usage 데이터 손실 문제
   - CLIProxyAPI 바이너리 수준 이슈, hot-reload 불가
   - 가능한 우회: stop 전 usage 스냅샷 저장?
+
+
+- [ ] cc-proxy.py 코드가 너무 길어짐. 모듈화하여 접근성을 높여야 함
 
 - [ ] 토큰 관리 위치 일원화 및 auth files 로드 기능 추가
   - 기존 provider별 config 디렉토리에 보관하던 auth file을 한 디렉토리 안에서 관리하고 file 명의 prefix로 구분
@@ -47,7 +60,7 @@
 
 - [ ] 파일(토큰) 열람 및 삭제 기능
 
-- [x] quota 캐싱 (TTL 60초)
+- [ ] quota 캐싱 (TTL 30초)
   - `/tmp/cc-proxy-quota-{provider}-{md5(auth_index)[:12]}.json` 계정별 캐시 파일
   - 60초 이내 재호출 시 upstream API 생략 → rate limit 방지
   - `watch -n 10 cc-proxy-quota` 수준의 polling 안전하게 사용 가능
@@ -58,3 +71,4 @@
   - `watch -n 1 cc-proxy-short` 으로 빠른 전체 모니터링 가능
 
 - [ ] provider 선택 출력: 현재 전체 provider를 출력하거나 단일 출력만 가능한데 두개 이상도 선택한 것만 출력 가능하도록
+- [ ] provider 마다 박스 색깔 다르게 적용
