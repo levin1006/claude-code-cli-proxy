@@ -957,6 +957,15 @@ def _time_ago(iso_str):
     return "{}d ago".format(int(delta / 86400))
 
 
+def _fmt_local_dt(iso_str):
+    """ISO timestamp → local time 'YYYY-MM-DD HH:MM:SS'."""
+    dt = _parse_iso(iso_str)
+    if not dt:
+        return ""
+    local_dt = dt.astimezone()
+    return local_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
 # ANSI color codes (empty string fallback keeps output clean when piped)
 _C_GREEN  = "\033[32m"
 _C_RED    = "\033[31m"
@@ -1037,10 +1046,17 @@ def _aggregate_per_account(usage_data):
             for detail in model_data.get("details", []):
                 src = detail.get("source", "unknown")
                 tok = detail.get("tokens", {}).get("total_tokens", 0)
+                ts  = detail.get("timestamp", "")
+                failed = detail.get("failed", False)
                 if src not in account_stats:
-                    account_stats[src] = {"requests": 0, "tokens": 0}
+                    account_stats[src] = {"requests": 0, "tokens": 0, "fails": 0, "last_time": "", "last_tok": 0}
                 account_stats[src]["requests"] += 1
                 account_stats[src]["tokens"] += tok
+                if failed:
+                    account_stats[src]["fails"] += 1
+                if ts > account_stats[src]["last_time"]:
+                    account_stats[src]["last_time"] = ts
+                    account_stats[src]["last_tok"] = tok
     return account_stats
 
 
@@ -1218,10 +1234,32 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line("", W))
         print(_box_line("  Per-account:", W))
         for acct, adata in sorted(acct_stats.items(), key=lambda x: -x[1]["tokens"]):
-            # content=64: "    " + email[:32] + "  " + count(5) + " req  " + tok(8) + " tokens"
-            # = 4+32+2+5+6+8+7 = 64
-            row = "    {:<32}  {:>5} req  {:>8} tokens".format(
-                acct[:32], adata["requests"], _fmt_tokens(adata["tokens"])
+            total    = adata["requests"]
+            fails    = adata["fails"]
+            ok       = total - fails
+            tok      = adata["tokens"]
+            last_tok = adata["last_tok"]
+            dt_str   = _fmt_local_dt(adata["last_time"]) if adata["last_time"] else ""
+
+            # req: total(green_ok/red_fail) — always show fail count even if 0
+            req_vis = "{}({}/{})".format(total, ok, fails)
+            req_str = "{}({}/{})".format(
+                total,
+                _C_GREEN + str(ok)    + _C_RESET,
+                _C_RED   + str(fails) + _C_RESET,
+            )
+            pad = max(0, 10 - len(req_vis))
+            req_padded = " " * pad + req_str
+
+            # last request: "YYYY-MM-DD HH:MM:SS  dim(last_tok)/total_tok"
+            tok_str = "{}{}{}/{}".format(
+                _C_DIM, _fmt_tokens(last_tok), _C_RESET, _fmt_tokens(tok)
+            ) if dt_str else _fmt_tokens(tok)
+            tok_vis = "{}/{}".format(_fmt_tokens(last_tok), _fmt_tokens(tok)) if dt_str else _fmt_tokens(tok)
+            tok_pad = max(0, 13 - len(tok_vis))
+            tok_padded = " " * tok_pad + tok_str
+            row = "    {:<20}  {}  {}  {}".format(
+                acct[:20], req_padded, dt_str, tok_padded
             )
             print(_box_line(row, W))
 
@@ -1336,7 +1374,8 @@ def cmd_check(base_dir, provider=None):
     import urllib.parse
 
     targets = [provider] if provider else list(PROVIDERS)
-    W = 68
+    term_w = shutil.get_terminal_size(fallback=(80, 24)).columns
+    W = max(80, min(term_w - 2, 120))
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     print(_box_top(W))
@@ -1642,11 +1681,8 @@ def main():
             print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
             return 1
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        W = 68
-        print(_box_top(W))
-        title = "  cc-proxy status"
-        padding = W - 4 - len(title) - len(now_str)
-        print(_box_line(title + " " * max(1, padding) + now_str, W))
+        term_w = shutil.get_terminal_size(fallback=(80, 24)).columns
+        # Parallel fetch first so we can compute needed width from actual data
         import threading
         prefetched = {}
         def _do_fetch(pvd, out):
@@ -1656,6 +1692,22 @@ def main():
             t.start()
         for t in fetch_threads:
             t.join(timeout=10)
+        # Compute minimum width from actual data: per-account row is widest
+        # fixed: 4+20+2+10+2+19+2+13 = 72; header title+datetime = ~44
+        min_content = 72
+        for pvd in targets:
+            d = prefetched.get(pvd, {})
+            for f in (d.get("auth_data") or {}).get("files", []):
+                email = f.get("email") or f.get("name") or ""
+                # Accounts row: "  " + email + "  " + time_ago(8) + "  " + status(~12) = email+24
+                min_content = max(min_content, len(email) + 24)
+        # +4 for "║ " and " ║" borders
+        needed_w = min_content + 4
+        W = max(needed_w, min(term_w - 2, 120))
+        print(_box_top(W))
+        title = "  cc-proxy status"
+        padding = W - 4 - len(title) - len(now_str)
+        print(_box_line(title + " " * max(1, padding) + now_str, W))
         for pvd in targets:
             data = prefetched.get(pvd, {})
             s = data.get("status") or get_status(base_dir, pvd)

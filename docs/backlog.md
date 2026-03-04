@@ -22,10 +22,7 @@
 
 ## 미완료
 
-### 우선순위 중간
-
-- [ ] --short / -s 압축 뷰
-  - 헤더 한 줄만 표시 (usage 세부 없이)
+- [ ] Usage -> per-account에서 req, fail, last request time, total tokens 표시 (fail, last req time 추가)
 
 - [ ] quota 표시 추가
   - management API에 전용 엔드포인트 없음 (/v0/management/quota → 404)
@@ -35,12 +32,18 @@
 - [ ] use interface (provider → account/usage/quota 브라우징)
   - 각 기능별 출력량이 크지 않아 현재로선 provider 브라우징을 우선 구현
 
-### 우선순위 낮음 / 보류
 
 - [ ] cc-proxy-stop 시 usage 데이터 손실 문제
   - CLIProxyAPI 바이너리 수준 이슈, hot-reload 불가
   - 가능한 우회: stop 전 usage 스냅샷 저장?
 
+- [ ] 토큰 관리 위치 일원화 및 auth files 로드 기능 추가
+  - 기존 provider별 config 디렉토리에 보관하던 auth file을 한 디렉토리 안에서 관리하고 file 명의 prefix로 구분
+  - 설치 위치에서 민감 정보인 토큰을 관리하는 것은 위험하기 때문.
+  - cc-proxy-auth를 실행시 별도 설정이 없으면 실행하는 위치에 파일 생성하여 사용자가 따로 관리할 수 있게 함
+  - cc-proxy에서는 지정한 위치에서 auth files를 불러오는 것을 시도하고 로드할 파일 경로를 설정하는 기능을 추가
+
 - [ ] 파일(토큰) 열람 및 삭제 기능
 
-- [ ] usage에 계정별 실패 통계 추가
+- [ ] --short / -s 압축 뷰
+  - 헤더 한 줄만 표시 (usage 세부 없이)
