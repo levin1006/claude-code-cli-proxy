@@ -990,17 +990,17 @@ def _fmt_reset_time(value):
     return "{}m".format(mins)
 
 
-def _fmt_quota_bar(remaining_pct):
-    """0-100 → colored '████████░░  80%' (10-block bar + percentage)."""
-    pct = max(0, min(100, int(remaining_pct)))
+def _fmt_quota_bar(used_pct):
+    """0-100 → colored '████████░░  80%' (10-block bar + percentage). Shows used amount."""
+    pct = max(0, min(100, int(used_pct)))
     filled = round(pct / 10)
     bar = "\u2588" * filled + "\u2591" * (10 - filled)
     if pct >= 80:
-        color = ""          # default
+        color = _C_RED      # heavy use → red
     elif pct >= 40:
         color = "\033[33m"  # yellow
     else:
-        color = _C_RED
+        color = ""          # low use → default
     reset = _C_RESET if color else ""
     return "{}{}{} {:>3}%".format(color, bar, reset, pct)
 
@@ -1035,7 +1035,7 @@ def _management_api_call(provider, secret, auth_index, method, url, headers, bod
 
 
 def _fetch_quota_antigravity(provider, secret, auth_index):
-    """fetchAvailableModels → {model_id: {"remaining_pct": int, "reset_str": str}}"""
+    """fetchAvailableModels → {model_id: {"used_pct": int, "reset_str": str}}"""
     url = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
     headers = {
         "Authorization": "Bearer $TOKEN$",
@@ -1047,7 +1047,7 @@ def _fetch_quota_antigravity(provider, secret, auth_index):
         return None
     if status_code != 200:
         err = (data.get("error") or {}).get("message", "HTTP {}".format(status_code))
-        return {"__error__": {"display": "error", "remaining_pct": 0, "reset_str": err[:40]}}
+        return {"__error__": {"display": "error", "used_pct": 100, "reset_str": err[:40]}}
     result = {}
     for model_id, minfo in data.get("models", {}).items():
         qi = minfo.get("quotaInfo", {})
@@ -1058,14 +1058,14 @@ def _fetch_quota_antigravity(provider, secret, auth_index):
         display = minfo.get("displayName", model_id)
         result[model_id] = {
             "display": display,
-            "remaining_pct": int(round(frac * 100)),
+            "used_pct": int(round((1.0 - frac) * 100)),
             "reset_str": reset_str,
         }
     return result
 
 
 def _fetch_quota_claude(provider, secret, auth_index):
-    """oauth/usage → {window_name: {"remaining_pct": int, "reset_str": str}}"""
+    """oauth/usage → {window_name: {"used_pct": int, "reset_str": str}}"""
     url = "https://api.anthropic.com/api/oauth/usage"
     headers = {
         "Authorization": "Bearer $TOKEN$",
@@ -1077,7 +1077,7 @@ def _fetch_quota_claude(provider, secret, auth_index):
         return None
     if status_code != 200:
         err = (data.get("error") or {}).get("message", "HTTP {}".format(status_code))
-        return {"__error__": {"display": "error", "remaining_pct": 0, "reset_str": err[:40]}}
+        return {"__error__": {"display": "error", "used_pct": 100, "reset_str": err[:40]}}
     result = {}
     window_labels = {
         "five_hour":      "5h window",
@@ -1092,14 +1092,14 @@ def _fetch_quota_claude(provider, secret, auth_index):
         util = w.get("utilization")
         if util is None:
             continue
-        remaining_pct = max(0, 100 - int(round(util)))
+        used_pct = min(100, int(round(util)))
         reset_str = _fmt_reset_time(w.get("resets_at", ""))
-        result[key] = {"display": label, "remaining_pct": remaining_pct, "reset_str": reset_str}
+        result[key] = {"display": label, "used_pct": used_pct, "reset_str": reset_str}
     return result
 
 
 def _fetch_quota_codex(provider, secret, auth_index):
-    """wham/usage → {window: {"remaining_pct": int, "reset_str": str}}"""
+    """wham/usage → {window: {"used_pct": int, "reset_str": str}}"""
     url = "https://chatgpt.com/backend-api/wham/usage"
     headers = {
         "Authorization": "Bearer $TOKEN$",
@@ -1111,17 +1111,16 @@ def _fetch_quota_codex(provider, secret, auth_index):
         return None
     if status_code != 200:
         err = (data.get("error") or {}).get("message", "HTTP {}".format(status_code))
-        return {"__error__": {"display": "error", "remaining_pct": 0, "reset_str": err[:40]}}
+        return {"__error__": {"display": "error", "used_pct": 100, "reset_str": err[:40]}}
     result = {}
     rl = data.get("rate_limit", {})
     for wkey, label in [("primary_window", "5h window"), ("secondary_window", "7d window")]:
         w = rl.get(wkey)
         if not w:
             continue
-        used_pct = w.get("used_percent", 0) or 0
-        remaining_pct = max(0, 100 - int(round(used_pct)))
+        used_pct = min(100, int(round(w.get("used_percent", 0) or 0)))
         reset_str = _fmt_reset_time(w.get("reset_after_seconds"))
-        result[wkey] = {"display": label, "remaining_pct": remaining_pct, "reset_str": reset_str}
+        result[wkey] = {"display": label, "used_pct": used_pct, "reset_str": reset_str}
     return result
 
 
@@ -1511,13 +1510,13 @@ def _print_status_dashboard(base_dir, provider, status, W,
                     label[:26], _C_DIM, _C_RESET), W))
                 continue
             print(_box_line("  {}".format(label[:34]), W))
-            # Show models sorted by remaining (ascending — show depleted first)
-            items = sorted(qd.items(), key=lambda x: x[1]["remaining_pct"])
+            # Show models sorted by used (descending — show most used first)
+            items = sorted(qd.items(), key=lambda x: -x[1]["used_pct"])
             for model_id, info in items:
                 if shown_models and model_id not in shown_models:
                     continue
                 display = info.get("display", model_id)
-                bar = _fmt_quota_bar(info["remaining_pct"])
+                bar = _fmt_quota_bar(info["used_pct"])
                 reset = info["reset_str"]
                 reset_col = "  resets {}".format(reset) if reset else ""
                 row = "    {:<26}  {}{}".format(display[:26], bar, reset_col)
