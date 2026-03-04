@@ -14,20 +14,23 @@
 - [x] 401 실패 시 힌트 메시지 (auth failed — set CC_PROXY_SECRET)
 - [x] auth-files 풍부한 필드 활용 (status, unavailable, last_refresh time_ago, plan_type)
 - [x] 병렬 API 호출 (threading으로 4개 provider 동시 fetch)
-- [x] cc-proxy-check 커맨드 구현
+- [x] cc-proxy-check 커맨드 구현 → cc-proxy-status --check 로 통합
   - per-credential 검증: auth-files/models?name=<name> API로 계정별 모델 접근 확인
   - 계정별 모델 수, last_refresh, status 표시
   - 전체 verdict (All OK / Some degraded)
   - Available Models 목록 표시
 
-## 미완료
+- [x] Usage -> per-account에서 req, fail, last request time, total tokens 표시
+  - 요청 수: total / ok(초록) / fail(빨강) 오른쪽 정렬 컬럼
+  - 토큰: dim(last_req_tok) / total_tok · dim(datetime) 포맷
 
-- [ ] Usage -> per-account에서 req, fail, last request time, total tokens 표시 (fail, last req time 추가)
-
-- [ ] quota 표시 추가
-  - management API에 전용 엔드포인트 없음 (/v0/management/quota → 404)
-  - 웹 대시보드는 upstream API 직접 호출로 quota 조회하는 것으로 추정
-  - CLIProxyAPI에 quota 엔드포인트가 추가되면 재검토
+- [x] quota 표시 추가 (cc-proxy-status --quota)
+  - /v0/management/api-call 엔드포인트로 upstream provider API 프록시 호출
+  - antigravity: fetchAvailableModels → quotaInfo.remainingFraction
+  - claude: oauth/usage → five_hour / seven_day / seven_day_opus utilization
+  - codex: wham/usage → primary_window / secondary_window used_percent
+  - 진행바 (10칸) + 리셋 시간 표시, 색상 구분 (≥80% 기본 / 40-79% 노랑 / <40% 빨강)
+  - cc-proxy-check alias → cc-proxy-status --check, 신규 cc-proxy-quota alias 추가
 
 - [ ] use interface (provider → account/usage/quota 브라우징)
   - 각 기능별 출력량이 크지 않아 현재로선 provider 브라우징을 우선 구현
