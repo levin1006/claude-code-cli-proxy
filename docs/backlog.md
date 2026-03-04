@@ -32,8 +32,8 @@
   - 진행바 (10칸) + 리셋 시간 표시, 색상 구분 (≥80% 기본 / 40-79% 노랑 / <40% 빨강)
   - cc-proxy-check alias → cc-proxy-status --check, 신규 cc-proxy-quota alias 추가
 
-- [ ] use interface (provider → account/usage/quota 브라우징)
-  - 각 기능별 출력량이 크지 않아 현재로선 provider 브라우징을 우선 구현
+- [ ] use interface (provider 브라우징)
+  - 공간이 넓어졌으므로 status의 quota와 available model을 한 화면으로 통합. account validation은 기존 accounts 항목과 겹치므로 통합. 
 
 
 - [ ] cc-proxy-stop 시 usage 데이터 손실 문제
@@ -48,10 +48,10 @@
 
 - [ ] 파일(토큰) 열람 및 삭제 기능
 
-- [ ] quota 캐싱 (TTL 10초)
-  - `--quota` 결과를 임시 파일(`/tmp/cc-proxy-quota-<provider>.json`)에 저장
-  - 10초 이내 재호출 시 캐시 사용 → `watch -n 10 cc-proxy-status --quota` 안전하게 사용 가능
-  - 캐시 만료 시 백그라운드 refresh 또는 동기 재fetch
+- [x] quota 캐싱 (TTL 60초)
+  - `/tmp/cc-proxy-quota-{provider}-{md5(auth_index)[:12]}.json` 계정별 캐시 파일
+  - 60초 이내 재호출 시 upstream API 생략 → rate limit 방지
+  - `watch -n 10 cc-proxy-quota` 수준의 polling 안전하게 사용 가능
 
 - [ ] --short / -s 압축 뷰
   - 헤더 한 줄만 표시 (usage 세부 없이)
