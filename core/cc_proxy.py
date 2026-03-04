@@ -8,6 +8,7 @@ Usage:
   python3 core/cc_proxy.py start <provider> | all
   python3 core/cc_proxy.py stop [provider]
   python3 core/cc_proxy.py status [provider]
+  python3 core/cc_proxy.py ui [provider]
   python3 core/cc_proxy.py links [provider]
   python3 core/cc_proxy.py auth <provider>
   python3 core/cc_proxy.py set-secret <secret>
@@ -27,6 +28,7 @@ import tempfile
 import json
 import base64
 import platform
+import unicodedata
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -700,22 +702,25 @@ def ensure_tokens(base_dir, provider):
     return True
 
 
-def start_proxy(base_dir, provider):
+def start_proxy(base_dir, provider, quiet=False):
     exe = get_binary_path(base_dir)
     if not exe.exists():
-        print("[cc-proxy] Binary not found: {}".format(exe), file=sys.stderr)
+        if not quiet:
+            print("[cc-proxy] Binary not found: {}".format(exe), file=sys.stderr)
         return False
 
     wd = get_provider_dir(base_dir, provider)
     if not wd.is_dir():
-        print("[cc-proxy] Provider config directory not found: {}".format(wd), file=sys.stderr)
+        if not quiet:
+            print("[cc-proxy] Provider config directory not found: {}".format(wd), file=sys.stderr)
         return False
 
     config_path = get_config_file(base_dir, provider)
     if not config_path.exists():
         root_bootstrap = base_dir / "config.yaml"
         if not root_bootstrap.exists():
-            print("[cc-proxy] No config.yaml found for {}".format(provider), file=sys.stderr)
+            if not quiet:
+                print("[cc-proxy] No config.yaml found for {}".format(provider), file=sys.stderr)
             return False
         shutil.copy(root_bootstrap, config_path)
 
@@ -723,11 +728,13 @@ def start_proxy(base_dir, provider):
     if existing_pid:
         write_pid(base_dir, provider, existing_pid)
         if check_health(provider):
-            print("[cc-proxy] Reusing healthy proxy for {} (pid={})".format(provider, existing_pid))
-            status = get_status(base_dir, provider)
-            print_management_links(base_dir, provider, statuses={provider: status})
+            if not quiet:
+                print("[cc-proxy] Reusing healthy proxy for {} (pid={})".format(provider, existing_pid))
+                status = get_status(base_dir, provider)
+                print_management_links(base_dir, provider, statuses={provider: status})
             return True
-        print("[cc-proxy] Process on port {} is unhealthy. Stop it first.".format(PORTS[provider]), file=sys.stderr)
+        if not quiet:
+            print("[cc-proxy] Process on port {} is unhealthy. Stop it first.".format(PORTS[provider]), file=sys.stderr)
         return False
 
     rewrite_port_in_config(config_path, PORTS[provider])
@@ -756,20 +763,23 @@ def start_proxy(base_dir, provider):
     actual_pid = resolve_pid_by_port(PORTS[provider])
     write_pid(base_dir, provider, actual_pid if actual_pid else proc.pid)
 
-    print("[cc-proxy] Starting {} proxy...".format(provider))
+    if not quiet:
+        print("[cc-proxy] Starting {} proxy...".format(provider))
     for _ in range(15):
         if check_health(provider):
-            print("[cc-proxy] Proxy ready at http://{}:{}/".format(HOST, PORTS[provider]))
-            status = get_status(base_dir, provider)
-            print_management_links(base_dir, provider, statuses={provider: status})
+            if not quiet:
+                print("[cc-proxy] Proxy ready at http://{}:{}/".format(HOST, PORTS[provider]))
+                status = get_status(base_dir, provider)
+                print_management_links(base_dir, provider, statuses={provider: status})
             return True
         time.sleep(0.2)
 
-    print("[cc-proxy] Failed to become healthy at http://{}:{}/".format(HOST, PORTS[provider]), file=sys.stderr)
+    if not quiet:
+        print("[cc-proxy] Failed to become healthy at http://{}:{}/".format(HOST, PORTS[provider]), file=sys.stderr)
     return False
 
 
-def stop_proxy(base_dir, provider):
+def stop_proxy(base_dir, provider, quiet=False):
     if provider:
         pid = read_pid(base_dir, provider)
         if pid and is_pid_alive(pid):
@@ -780,7 +790,8 @@ def stop_proxy(base_dir, provider):
         if pid2:
             kill_pid(pid2)
             time.sleep(0.25)
-        print("[cc-proxy] Stopped {}.".format(provider))
+        if not quiet:
+            print("[cc-proxy] Stopped {}.".format(provider))
     else:
         for pvd in PROVIDERS:
             pid = read_pid(base_dir, pvd)
@@ -792,9 +803,10 @@ def stop_proxy(base_dir, provider):
                 kill_pid(pid2)
         kill_all_proxies()
         time.sleep(0.25)
-        print("[cc-proxy] All proxies stopped.")
+        if not quiet:
+            print("[cc-proxy] All proxies stopped.")
 
-    if stop_dashboard_server():
+    if stop_dashboard_server() and (not quiet):
         print("[cc-proxy] Dashboard link server stopped.")
 
 
@@ -882,15 +894,39 @@ def get_status(base_dir, provider):
     }
 
 
+def _management_api_request(provider, endpoint, secret="cc", method="GET", payload=None, timeout=8):
+    """Call /v0/management/<endpoint> with Bearer auth.
+
+    method: GET/POST/DELETE
+    payload: dict -> JSON body (for POST/PUT)
+    """
+    import urllib.request
+
+    port = PORTS[provider]
+    url = "http://{}:{}/v0/management/{}".format(HOST, port, endpoint.lstrip("/"))
+    headers = {"Authorization": "Bearer {}".format(secret)}
+    raw = None
+    if payload is not None:
+        raw = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    req = urllib.request.Request(url, data=raw, headers=headers, method=method.upper())
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = resp.read()
+    if not body:
+        return {}
+    text = body.decode("utf-8", errors="replace").strip()
+    if not text:
+        return {}
+    try:
+        return json.loads(text)
+    except Exception:
+        return {"raw": text}
+
+
 def _management_api(provider, endpoint, secret="cc"):
     """GET /v0/management/<endpoint> from a running provider proxy."""
-    import urllib.request
-    import urllib.error
-    port = PORTS[provider]
-    url = "http://{}:{}/v0/management/{}".format(HOST, port, endpoint)
-    req = urllib.request.Request(url, headers={"Authorization": "Bearer {}".format(secret)})
-    with urllib.request.urlopen(req, timeout=5) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    return _management_api_request(provider, endpoint, secret, method="GET", payload=None, timeout=5)
 
 
 def _proxy_api(provider, path, timeout=5):
@@ -1170,17 +1206,72 @@ _C_DIM    = "\033[2m"
 _C_BOLD   = "\033[1m"
 _C_RESET  = "\033[0m"
 
+# TUI screen/key constants
+_TUI_ALT_ON = "\033[?1049h"
+_TUI_ALT_OFF = "\033[?1049l"
+_TUI_CURSOR_HIDE = "\033[?25l"
+_TUI_CURSOR_SHOW = "\033[?25h"
+_TUI_CLEAR = "\033[2J"
+_TUI_CLEAR_EOS = "\033[J"
+_TUI_HOME = "\033[H"
+_TUI_KEY_LEFT = "left"
+_TUI_KEY_RIGHT = "right"
+_TUI_KEY_UP = "up"
+_TUI_KEY_DOWN = "down"
+_TUI_KEY_ESC = "esc"
+
+# Linux/Unix stdin sequence buffer (ESC sequence may arrive split)
+_TUI_STDIN_BUF = ""
+# Windows key event buffer (preserve order: navigation then toggle)
+_TUI_WIN_BUF = []
+
+
+def _strip_ansi(s):
+    return re.sub(r"\033\[[0-9;]*m", "", s)
+
 
 def _visible_len(s):
-    """ANSI escape를 제거한 실제 보이는 문자 길이."""
-    return len(re.sub(r"\033\[[0-9;]*m", "", s))
+    """ANSI 제거 + 동아시아 전각폭 기준으로 실제 표시 폭 계산."""
+    plain = _strip_ansi(s)
+    w = 0
+    for ch in plain:
+        # CJK/box-drawing/emoji 계열은 보통 2칸 폭
+        w += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return w
+
+
+def _clip_visible(s, max_visible):
+    """ANSI 코드 보존 상태로 표시 폭 max_visible까지 안전하게 자른다."""
+    if max_visible <= 0:
+        return ""
+    out = []
+    i = 0
+    vis = 0
+    n = len(s)
+    while i < n:
+        ch = s[i]
+        if ch == "\033":
+            m = re.match(r"\033\[[0-9;]*m", s[i:])
+            if m:
+                seq = m.group(0)
+                out.append(seq)
+                i += len(seq)
+                continue
+        ch_w = 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+        if vis + ch_w > max_visible:
+            break
+        out.append(ch)
+        vis += ch_w
+        i += 1
+    if not "".join(out).endswith(_C_RESET):
+        out.append(_C_RESET)
+    return "".join(out)
 
 
 def _box_line(text, width):
-    """║  text    ║ 형태로 패딩. ANSI escape 코드가 포함된 text도 정확히 정렬."""
-    ansi_extra = len(text) - _visible_len(text)
+    """║  text    ║ 형태로 패딩. ANSI + CJK 폭까지 고려해 정렬."""
     max_visible = width - 4
-    inner = text[: max_visible + ansi_extra]
+    inner = _clip_visible(text, max_visible)
     pad = max_visible - _visible_len(inner)
     return "\u2551 {}{} \u2551".format(inner, " " * max(0, pad))
 
@@ -1351,7 +1442,9 @@ def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=F
 def _print_status_dashboard(base_dir, provider, status, W,
                             auth_data=None, usage_data=None, auth_error=False,
                             models_per_account=None, quota_data=None,
-                            proxy_models=None, show_check=False):
+                            proxy_models=None, show_check=False,
+                            selected_account_name=None,
+                            selected_account_key=None):
     """Print rich dashboard panel for a provider.
 
     quota_data:    {account_name: quota_dict} — show Quota section when present
@@ -1411,7 +1504,12 @@ def _print_status_dashboard(base_dir, provider, status, W,
         if plan_type:
             suffix = " [{}]".format(plan_type)
             label = email[:max(0, 28 - len(suffix))] + suffix
-        row = "  {:<34}  {:>8}  {}".format(label[:34], time_str, acct_status)
+        if selected_account_key:
+            is_selected = (_account_identity(f) == selected_account_key)
+        else:
+            is_selected = bool(selected_account_name and name == selected_account_name)
+        cursor = "▸" if is_selected else " "
+        row = "{} {:<34}  {:>8}  {}".format(cursor, label[:34], time_str, acct_status)
         print(_box_line(row, W))
 
     # --- usage section ---
@@ -1617,6 +1715,647 @@ def _print_status_dashboard(base_dir, provider, status, W,
     print(_box_line("", W))
 
 
+
+
+def _tui_write(s):
+    sys.stdout.write(s)
+
+
+def _tui_flush():
+    sys.stdout.flush()
+
+
+def _tui_enter_screen():
+    _tui_write(_TUI_ALT_ON + _TUI_CURSOR_HIDE + _TUI_HOME + _TUI_CLEAR)
+    _tui_flush()
+
+
+def _tui_leave_screen():
+    _tui_write(_TUI_CURSOR_SHOW + _TUI_ALT_OFF)
+    _tui_flush()
+
+
+def _tui_key_to_action(key):
+    if not key:
+        return None
+    if key in (_TUI_KEY_LEFT, _TUI_KEY_RIGHT, _TUI_KEY_UP, _TUI_KEY_DOWN, _TUI_KEY_ESC):
+        return key
+    if key == "\x1b":
+        return _TUI_KEY_ESC
+    if key == " ":
+        return "toggle"
+    lk = key.lower()
+    if lk in ("q", "r"):
+        return lk
+    if lk in ("a", "s", "w", "d"):
+        return {
+            "a": _TUI_KEY_LEFT,
+            "s": _TUI_KEY_DOWN,
+            "w": _TUI_KEY_UP,
+            "d": _TUI_KEY_RIGHT,
+        }[lk]
+    if lk in ("1", "2", "3", "4"):
+        return lk
+    return None
+
+
+def _read_key_timeout(timeout_sec=0.5):
+    global _TUI_STDIN_BUF, _TUI_WIN_BUF
+
+    if IS_WINDOWS:
+        import msvcrt
+
+        # return buffered key first (preserve exact order)
+        if _TUI_WIN_BUF:
+            return _TUI_WIN_BUF.pop(0)
+
+        end = time.time() + max(0.0, timeout_sec)
+        while time.time() < end:
+            if msvcrt.kbhit():
+                ch = msvcrt.getch()
+                action = None
+                if ch in (b"\x00", b"\xe0"):
+                    ch2 = msvcrt.getch()
+                    mapping = {
+                        b"K": _TUI_KEY_LEFT,
+                        b"M": _TUI_KEY_RIGHT,
+                        b"H": _TUI_KEY_UP,
+                        b"P": _TUI_KEY_DOWN,
+                    }
+                    action = mapping.get(ch2)
+                elif ch == b"\x1b":
+                    action = _TUI_KEY_ESC
+                else:
+                    try:
+                        action = ch.decode("utf-8", errors="ignore")
+                    except Exception:
+                        action = None
+
+                if action is not None:
+                    _TUI_WIN_BUF.append(action)
+
+                # drain additional pending keys quickly into buffer
+                drain_deadline = time.time() + 0.01
+                while time.time() < drain_deadline and msvcrt.kbhit():
+                    chx = msvcrt.getch()
+                    ax = None
+                    if chx in (b"\x00", b"\xe0"):
+                        chx2 = msvcrt.getch()
+                        ax = {
+                            b"K": _TUI_KEY_LEFT,
+                            b"M": _TUI_KEY_RIGHT,
+                            b"H": _TUI_KEY_UP,
+                            b"P": _TUI_KEY_DOWN,
+                        }.get(chx2)
+                    elif chx == b"\x1b":
+                        ax = _TUI_KEY_ESC
+                    else:
+                        try:
+                            ax = chx.decode("utf-8", errors="ignore")
+                        except Exception:
+                            ax = None
+                    if ax is not None:
+                        _TUI_WIN_BUF.append(ax)
+
+                return _TUI_WIN_BUF.pop(0) if _TUI_WIN_BUF else None
+
+            time.sleep(0.002)
+
+        return None
+
+    import termios
+    import tty
+    import select
+
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+
+        # fill local stdin buffer with all currently available bytes
+        r, _, _ = select.select([sys.stdin], [], [], max(0.0, timeout_sec))
+        if r:
+            while True:
+                r2, _, _ = select.select([sys.stdin], [], [], 0)
+                if not r2:
+                    break
+                _TUI_STDIN_BUF += sys.stdin.read(1)
+
+        if not _TUI_STDIN_BUF:
+            return None
+
+        # If ESC starts a sequence, wait a tiny bit for the remaining bytes.
+        if _TUI_STDIN_BUF.startswith("\x1b") and len(_TUI_STDIN_BUF) == 1:
+            r3, _, _ = select.select([sys.stdin], [], [], 0.03)
+            if r3:
+                _TUI_STDIN_BUF += sys.stdin.read(1)
+                while True:
+                    r4, _, _ = select.select([sys.stdin], [], [], 0)
+                    if not r4:
+                        break
+                    _TUI_STDIN_BUF += sys.stdin.read(1)
+
+        # Parse known sequences first (longest match first)
+        seq_map = {
+            "\x1b[A": _TUI_KEY_UP,
+            "\x1b[B": _TUI_KEY_DOWN,
+            "\x1b[C": _TUI_KEY_RIGHT,
+            "\x1b[D": _TUI_KEY_LEFT,
+            "\x1bOA": _TUI_KEY_UP,
+            "\x1bOB": _TUI_KEY_DOWN,
+            "\x1bOC": _TUI_KEY_RIGHT,
+            "\x1bOD": _TUI_KEY_LEFT,
+        }
+        for seq in sorted(seq_map.keys(), key=len, reverse=True):
+            if _TUI_STDIN_BUF.startswith(seq):
+                _TUI_STDIN_BUF = _TUI_STDIN_BUF[len(seq):]
+                return seq_map[seq]
+
+        # single-byte fallback
+        ch = _TUI_STDIN_BUF[0]
+        _TUI_STDIN_BUF = _TUI_STDIN_BUF[1:]
+        if ch == "\x1b":
+            return _TUI_KEY_ESC
+        return ch
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def _account_identity(f):
+    ai = (f.get("auth_index") or "").strip()
+    if ai:
+        return "auth_index:" + ai
+    path = os.path.basename((f.get("path") or f.get("name") or "").strip())
+    email = (f.get("email") or f.get("account") or "").strip()
+    return "fallback:{}:{}".format(path, email)
+
+
+def _dedupe_auth_files(auth_data):
+    """Deduplicate auth-files entries caused by mixed relative/absolute path reporting.
+
+    Keep the newest record per auth_index (fallback: path/name/email tuple).
+    """
+    if not auth_data or "files" not in auth_data:
+        return auth_data
+
+    files = auth_data.get("files") or []
+    if not files:
+        return auth_data
+
+    def _ts(f):
+        return (
+            f.get("updated_at")
+            or f.get("last_refresh")
+            or f.get("modtime")
+            or f.get("created_at")
+            or ""
+        )
+
+    picked = {}
+    for f in files:
+        k = _account_identity(f)
+        cur = picked.get(k)
+        if cur is None or _ts(f) >= _ts(cur):
+            picked[k] = f
+
+    out = dict(auth_data)
+    out["files"] = sorted(picked.values(), key=lambda x: (x.get("email") or x.get("account") or x.get("name") or ""))
+    return out
+
+
+def _tui_clear_input_buffer():
+    global _TUI_STDIN_BUF, _TUI_WIN_BUF
+    _TUI_STDIN_BUF = ""
+    _TUI_WIN_BUF = []
+
+
+def _tui_discard_pending_input(settle_ms=0):
+    """Discard queued key events (local + OS buffer).
+
+    settle_ms>0이면 짧은 시간 동안 반복적으로 비워서 토글 직후 key repeat 꼬임을 줄인다.
+    """
+    _tui_clear_input_buffer()
+
+    def _flush_once():
+        try:
+            if IS_WINDOWS:
+                import msvcrt
+                while msvcrt.kbhit():
+                    msvcrt.getch()
+            else:
+                import termios
+                termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+        except Exception:
+            pass
+        _tui_clear_input_buffer()
+
+    _flush_once()
+    if settle_ms and settle_ms > 0:
+        end = time.time() + (float(settle_ms) / 1000.0)
+        while time.time() < end:
+            _flush_once()
+            time.sleep(0.005)
+
+
+def _tui_fetch_provider(base_dir, provider):
+    d = _prefetch_provider_data(
+        base_dir,
+        provider,
+        fetch_quota=True,
+        fetch_check=True,
+    )
+    d["auth_data"] = _dedupe_auth_files(d.get("auth_data"))
+    return d
+
+
+def _tui_fetch_provider_light(base_dir, provider):
+    """Faster refresh path: skip quota/check heavy calls."""
+    d = _prefetch_provider_data(
+        base_dir,
+        provider,
+        fetch_quota=False,
+        fetch_check=False,
+    )
+    d["auth_data"] = _dedupe_auth_files(d.get("auth_data"))
+    return d
+
+
+def _tui_toggle_account(base_dir, provider, account, progress_cb=None):
+    """Toggle disabled flag by directly editing the selected account JSON file.
+
+    원칙:
+    - 반드시 선택된 account의 path 파일만 수정
+    - runtime-only/non-file 계정은 수정하지 않음
+    - atomic write(임시파일 + replace)로 파일 손상 방지
+    """
+    def _progress(msg):
+        if progress_cb:
+            try:
+                progress_cb(msg)
+            except Exception:
+                pass
+
+    if not account:
+        return False, "no account selected"
+
+    if account.get("runtime_only"):
+        return False, "toggle unsupported: runtime-only account"
+    if account.get("source") and account.get("source") != "file":
+        return False, "toggle unsupported: non-file account"
+
+    rel_path = (account.get("path") or "").strip()
+    if not rel_path:
+        return False, "toggle unsupported: no file path"
+
+    provider_dir = get_provider_dir(base_dir, provider).resolve()
+    cand = Path(rel_path)
+    if cand.is_absolute():
+        file_path = cand.resolve()
+    else:
+        file_path = (provider_dir / cand).resolve()
+
+    # path escape guard
+    try:
+        file_path.relative_to(provider_dir)
+    except ValueError:
+        return False, "toggle blocked: path outside provider dir"
+
+    if not file_path.exists() or not file_path.is_file():
+        return False, "toggle unsupported: file not found"
+
+    _progress(_C_DIM + "파일 읽는 중..." + _C_RESET)
+    try:
+        raw = file_path.read_text(encoding="utf-8")
+    except Exception as e:
+        return False, "read failed: {}".format(e)
+
+    try:
+        obj = json.loads(raw)
+    except Exception as e:
+        return False, "json parse failed: {}".format(e)
+
+    if not isinstance(obj, dict):
+        return False, "json shape invalid"
+
+    obj["disabled"] = not bool(obj.get("disabled", False))
+
+    payload = json.dumps(obj, ensure_ascii=False, indent=2)
+    if not payload.endswith("\n"):
+        payload += "\n"
+
+    _progress(_C_DIM + "파일 저장 중..." + _C_RESET)
+    tmp = file_path.with_name(file_path.name + ".tmp")
+    try:
+        tmp.write_text(payload, encoding="utf-8")
+        os.replace(str(tmp), str(file_path))
+    except Exception as e:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
+        return False, "write failed: {}".format(e)
+
+    # binary가 파일 변경을 즉시 반영하지 않는 환경이 있어 provider 재기동으로 확정 반영
+    try:
+        status = get_status(base_dir, provider)
+        if status.get("running"):
+            _progress(_C_DIM + "provider 재시작 중..." + _C_RESET)
+            stop_proxy(base_dir, provider, quiet=True)
+            if not start_proxy(base_dir, provider, quiet=True):
+                return False, "toggle saved but restart failed"
+    except Exception as e:
+        return False, "toggle saved but reload failed: {}".format(e)
+
+    return True, "toggled"
+
+
+def _tui_render(base_dir, state):
+    provider = state["providers"][state["provider_idx"]]
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    term_w = shutil.get_terminal_size(fallback=(100, 24)).columns
+    W = max(84, min(term_w - 2, 140))
+
+    data = state["data"].get(provider)
+    if data is None:
+        data = _tui_fetch_provider(base_dir, provider)
+        state["data"][provider] = data
+
+    files = (data.get("auth_data") or {}).get("files", [])
+    if files:
+        state["account_idx"] = max(0, min(state["account_idx"], len(files) - 1))
+        selected = files[state["account_idx"]]
+        selected_name = selected.get("name")
+        selected_key = _account_identity(selected)
+    else:
+        state["account_idx"] = 0
+        selected = None
+        selected_name = None
+        selected_key = None
+
+    tabs = []
+    for i, pvd in enumerate(state["providers"]):
+        label = "{} {}".format(i + 1, pvd)
+        if i == state["provider_idx"]:
+            label = _C_BOLD + "[{}]".format(label) + _C_RESET
+        tabs.append(label)
+    tab_line = "  " + "   ".join(tabs)
+
+    footer_keys = "  ← →/a d provider   ↑ ↓/w s account   space toggle   r refresh   q quit"
+    if state.get("message"):
+        msg = "  " + state["message"]
+    else:
+        msg = "  " + _C_DIM + "ready" + _C_RESET
+
+    import io
+    from contextlib import redirect_stdout
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        print(_box_top(W))
+        title = "  cc-proxy ui"
+        padding = W - 4 - len(re.sub(r"\033\[[0-9;]*m", "", title)) - len(now_str)
+        print(_box_line(title + " " * max(1, padding) + now_str, W))
+        print(_box_sep(W))
+        print(_box_line(tab_line, W))
+
+        _print_status_dashboard(
+            base_dir,
+            provider,
+            data.get("status") or get_status(base_dir, provider),
+            W,
+            auth_data=data.get("auth_data"),
+            usage_data=data.get("usage_data"),
+            auth_error=data.get("auth_error", False),
+            models_per_account=data.get("models_per_account"),
+            quota_data=data.get("quota_data"),
+            proxy_models=data.get("proxy_models"),
+            show_check=True,
+            selected_account_name=selected_name,
+            selected_account_key=selected_key,
+        )
+
+        print(_box_sep(W))
+        print(_box_line(msg, W))
+        print(_box_line(footer_keys, W))
+        print(_box_bottom(W))
+
+    rendered = buf.getvalue()
+
+    # Full-frame repaint for stable terminal compatibility.
+    _tui_write(_TUI_HOME + _TUI_CLEAR)
+    _tui_write(rendered)
+    _tui_flush()
+
+    return selected
+
+
+def _tui_main_loop(base_dir, provider=None):
+    state = {
+        "providers": [provider] if provider else list(PROVIDERS),
+        "provider_idx": 0,
+        "account_idx": 0,
+        "data": {},
+        "last_fetch": {},
+        "message": "",
+        "busy": False,
+        "toggle_cooldown_until": 0.0,
+    }
+
+    def _mark_busy(on):
+        state["busy"] = bool(on)
+
+    refresh_interval = 5.0
+
+    def _refresh_provider(pvd, force=False, heavy=False):
+        last = state["last_fetch"].get(pvd, 0)
+        if force or (time.time() - last) >= refresh_interval:
+            if heavy:
+                fresh = _tui_fetch_provider(base_dir, pvd)
+                state["data"][pvd] = fresh
+            else:
+                fresh = _tui_fetch_provider_light(base_dir, pvd)
+                cur = state["data"].get(pvd, {})
+                # keep previously fetched heavy sections (quota/models) to avoid flicker/latency
+                if cur.get("quota_data") and not fresh.get("quota_data"):
+                    fresh["quota_data"] = cur.get("quota_data")
+                if cur.get("models_per_account") and not fresh.get("models_per_account"):
+                    fresh["models_per_account"] = cur.get("models_per_account")
+                if cur.get("proxy_models") and not fresh.get("proxy_models"):
+                    fresh["proxy_models"] = cur.get("proxy_models")
+                state["data"][pvd] = fresh
+            state["last_fetch"][pvd] = time.time()
+            return True
+        return False
+
+    def _refresh_current(force=False, heavy=False):
+        pvd = state["providers"][state["provider_idx"]]
+        return _refresh_provider(pvd, force=force, heavy=heavy)
+
+    def _prefetch_all_once():
+        import threading
+
+        results = {}
+        ts = time.time()
+
+        def _one(pvd):
+            try:
+                results[pvd] = _tui_fetch_provider(base_dir, pvd)
+            except Exception:
+                results[pvd] = {"status": get_status(base_dir, pvd)}
+
+        threads = [threading.Thread(target=_one, args=(pvd,)) for pvd in state["providers"]]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=20)
+
+        for pvd in state["providers"]:
+            if pvd in results:
+                state["data"][pvd] = results[pvd]
+                state["last_fetch"][pvd] = ts
+
+    _tui_enter_screen()
+    try:
+        _prefetch_all_once()
+        selected = _tui_render(base_dir, state)
+
+        while True:
+            action = _tui_key_to_action(_read_key_timeout(0.03))
+            dirty = False
+
+            # auto refresh is disabled in TUI loop to keep key responsiveness stable.
+            # use 'r' for explicit refresh.
+
+            if action is None:
+                if dirty:
+                    selected = _tui_render(base_dir, state)
+                continue
+
+            if action == "q":
+                return 0
+            if action == _TUI_KEY_ESC:
+                # Windows Terminal에서 화살표 시퀀스가 ESC로 축약되는 경우가 있어
+                # 오동작 종료를 방지하기 위해 ESC 단독 종료는 임시 비활성화.
+                state["message"] = _C_DIM + "press q to quit" + _C_RESET
+                dirty = True
+
+            # when busy (toggle in-flight), ignore all inputs except quit.
+            if state.get("busy"):
+                state["message"] = _C_DIM + "toggle in progress..." + _C_RESET
+                dirty = True
+                if dirty:
+                    selected = _tui_render(base_dir, state)
+                continue
+
+            if action == _TUI_KEY_LEFT:
+                state["provider_idx"] = (state["provider_idx"] - 1) % len(state["providers"])
+                state["account_idx"] = 0
+                state["message"] = ""
+                _refresh_current(force=True, heavy=False)
+                dirty = True
+            elif action == _TUI_KEY_RIGHT:
+                state["provider_idx"] = (state["provider_idx"] + 1) % len(state["providers"])
+                state["account_idx"] = 0
+                state["message"] = ""
+                _refresh_current(force=True, heavy=False)
+                dirty = True
+            elif action == _TUI_KEY_UP:
+                prev = state["account_idx"]
+                state["account_idx"] = max(0, state["account_idx"] - 1)
+                state["message"] = ""
+                dirty = (state["account_idx"] != prev)
+            elif action == _TUI_KEY_DOWN:
+                pvd = state["providers"][state["provider_idx"]]
+                files = (state["data"].get(pvd, {}).get("auth_data") or {}).get("files", [])
+                prev = state["account_idx"]
+                if files:
+                    state["account_idx"] = min(len(files) - 1, state["account_idx"] + 1)
+                state["message"] = ""
+                dirty = (state["account_idx"] != prev)
+            elif action in ("1", "2", "3", "4"):
+                idx = int(action) - 1
+                if idx < len(state["providers"]) and idx != state["provider_idx"]:
+                    state["provider_idx"] = idx
+                    state["account_idx"] = 0
+                    state["message"] = ""
+                    _refresh_current(force=True, heavy=False)
+                    dirty = True
+            elif action == "r":
+                _mark_busy(True)
+                _tui_discard_pending_input(settle_ms=20)
+                _refresh_current(force=True, heavy=True)
+                _tui_discard_pending_input(settle_ms=20)
+                _mark_busy(False)
+                state["message"] = _C_DIM + "refreshed" + _C_RESET
+                dirty = True
+            elif action == "toggle":
+                now = time.time()
+                if now < state.get("toggle_cooldown_until", 0.0):
+                    state["message"] = _C_DIM + "toggle cooldown..." + _C_RESET
+                    dirty = True
+                else:
+                    pvd = state["providers"][state["provider_idx"]]
+                    files = (state["data"].get(pvd, {}).get("auth_data") or {}).get("files", [])
+                    if not files:
+                        state["message"] = _C_DIM + "no account" + _C_RESET
+                        dirty = True
+                    else:
+                        idx = max(0, min(state["account_idx"], len(files) - 1))
+                        target = files[idx]
+                        target_key = _account_identity(target)
+                        target_email = target.get("email") or target.get("account") or target.get("name") or "?"
+
+                        # 안정성 우선 모드: old-stable 토글 시퀀스 + 진행 로그
+                        _mark_busy(True)
+                        state["toggle_cooldown_until"] = time.time() + 1.0
+
+                        try:
+                            def _progress(msg):
+                                state["message"] = msg
+                                _tui_render(base_dir, state)
+
+                            state["message"] = _C_DIM + "[1/3] toggling file: {}".format(target_email[:24]) + _C_RESET
+                            selected = _tui_render(base_dir, state)
+                            ok, m = _tui_toggle_account(base_dir, pvd, target, progress_cb=_progress)
+
+                            state["message"] = _C_DIM + "[2/3] refreshing provider data..." + _C_RESET
+                            selected = _tui_render(base_dir, state)
+
+                            # old-stable behavior: heavy refresh for definitive state
+                            _refresh_current(force=True, heavy=True)
+                            files2 = (state["data"].get(pvd, {}).get("auth_data") or {}).get("files", [])
+                            if files2:
+                                restored = None
+                                for i2, f2 in enumerate(files2):
+                                    if _account_identity(f2) == target_key:
+                                        restored = i2
+                                        break
+                                if restored is None:
+                                    for i2, f2 in enumerate(files2):
+                                        em2 = f2.get("email") or f2.get("account") or f2.get("name") or ""
+                                        if em2 == target_email:
+                                            restored = i2
+                                            break
+                                if restored is not None:
+                                    state["account_idx"] = restored
+                                else:
+                                    state["account_idx"] = min(idx, len(files2) - 1)
+
+                            if ok:
+                                state["message"] = _C_GREEN + "[3/3] toggled: {}".format(target_email[:24]) + _C_RESET
+                            else:
+                                state["message"] = _C_RED + m + _C_RESET
+                            dirty = True
+                        finally:
+                            _tui_discard_pending_input(settle_ms=120)
+                            _mark_busy(False)
+
+            if dirty:
+                selected = _tui_render(base_dir, state)
+
+    finally:
+        _tui_leave_screen()
 
 
 def run_auth(base_dir, provider):
@@ -1855,6 +2594,13 @@ def main():
             return 1
         stop_proxy(base_dir, provider)
         return 0
+
+    elif cmd == "ui":
+        provider = args[1] if len(args) > 1 else None
+        if provider and provider not in PROVIDERS:
+            print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
+            return 1
+        return _tui_main_loop(base_dir, provider)
 
     elif cmd in ("status", "check"):
         # Parse flags and optional provider from remaining args

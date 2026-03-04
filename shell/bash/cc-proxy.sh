@@ -44,6 +44,7 @@ cc-proxy-status()     { _cc_proxy status        "$@"; }
 cc-proxy-check()      { _cc_proxy status --check "$@"; }  # alias → status --check
 cc-proxy-quota()      { _cc_proxy status --quota "$@"; }
 cc-proxy-short()      { _cc_proxy status -s       "$@"; }  # compact one-line-per-provider
+cc-proxy-ui()         { _cc_proxy ui             "$@"; }
 cc-proxy-links()      { _cc_proxy links      "$@"; }
 cc-proxy-stop()       { _cc_proxy stop       "$@"; }
 cc-proxy-auth()       { _cc_proxy auth       "$@"; }
