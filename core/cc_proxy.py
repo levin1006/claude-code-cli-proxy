@@ -1041,6 +1041,19 @@ def _fmt_quota_bar(used_pct):
     return "{}{}{} {:>3}%".format(color, bar, reset, pct)
 
 
+def _quota_window_rank(model_id, info):
+    """Sort key for quota rows: 5h windows first, then 7d, then others.
+
+    Returns lower value for higher priority.
+    """
+    text = "{} {}".format(model_id or "", (info or {}).get("display", "")).lower()
+    if "5h" in text or "five_hour" in text or "primary_window" in text:
+        return 0
+    if "7d" in text or "seven_day" in text or "secondary_window" in text:
+        return 1
+    return 2
+
+
 def _management_api_call(provider, secret, auth_index, method, url, headers, body=None):
     """POST /v0/management/api-call → (upstream_status_code, parsed_body_dict).
 
@@ -1658,11 +1671,14 @@ def _print_status_dashboard(base_dir, provider, status, W,
                     label[:26], _C_DIM, _C_RESET), W))
                 continue
             print(_box_line("  {}".format(label[:34]), W))
-            # Show models sorted by used (descending — show most used first)
-            items = sorted(qd.items(), key=lambda x: -x[1]["used_pct"])
-            for model_id, info in items:
+            # Force 5h first, then 7d, then others; tie-break by higher used_pct.
+            items = []
+            for model_id, info in qd.items():
                 if shown_models and model_id not in shown_models:
                     continue
+                items.append((model_id, info))
+            items.sort(key=lambda x: (_quota_window_rank(x[0], x[1]), -x[1]["used_pct"]))
+            for model_id, info in items:
                 display = info.get("display", model_id)
                 bar = _fmt_quota_bar(info["used_pct"])
                 reset = info["reset_str"]
