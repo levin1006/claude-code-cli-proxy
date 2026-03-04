@@ -10,36 +10,32 @@
 - [x] ~/.local/bin/ shim 스크립트 (watch, cron 등 비대화형 셸 지원)
 - [x] per-account usage 통계 (계정별 요청 수, 토큰 소비)
 - [x] bcrypt 해시 감지 + CC_PROXY_SECRET 환경변수 지원
+- [x] 상단 시간 초 단위까지 표시 (watch -n 1 용도)
+- [x] 401 실패 시 힌트 메시지 (auth failed — set CC_PROXY_SECRET)
+- [x] auth-files 풍부한 필드 활용 (status, unavailable, last_refresh time_ago, plan_type)
+- [x] 병렬 API 호출 (threading으로 4개 provider 동시 fetch)
+- [x] cc-proxy-check 커맨드 구현
+  - per-credential 검증: auth-files/models?name=<name> API로 계정별 모델 접근 확인
+  - 계정별 모델 수, last_refresh, status 표시
+  - 전체 verdict (All OK / Some degraded)
+  - Available Models 목록 표시
 
 ## 미완료
 
-### 우선순위 높음
-
-- [ ] 토큰/계정 유효성 검증 (cc-proxy-check)
-  - 현재: 직접 claude "hello"로 수동 확인 → 토큰 낭비, 번거로움
-  - 목표: /v1/models GET 또는 최소 completion으로 자동 검증
-  - management API disable/enable 활용한 개별 계정 검증 가능성
-
-- [ ] 상단 시간 초 단위까지 표시 (watch -n 1 용도)
-
 ### 우선순위 중간
-
-- [ ] 병렬 API 호출 (threading)
-  - 현재 4개 provider 순차 fetch → 동시 호출 시 4배 빨라짐
-  - watch -n 1에서 체감
 
 - [ ] --short / -s 압축 뷰
   - 헤더 한 줄만 표시 (usage 세부 없이)
 
-- [ ] 401 실패 시 힌트 메시지
-  - (auth failed — set CC_PROXY_SECRET)
-
 - [ ] quota 표시 추가
-
-### 우선순위 낮음 / 보류
+  - management API에 전용 엔드포인트 없음 (/v0/management/quota → 404)
+  - 웹 대시보드는 upstream API 직접 호출로 quota 조회하는 것으로 추정
+  - CLIProxyAPI에 quota 엔드포인트가 추가되면 재검토
 
 - [ ] use interface (provider → account/usage/quota 브라우징)
-  - 각 기능별 출력량이 크지 않아 현재로선 보류
+  - 각 기능별 출력량이 크지 않아 현재로선 provider 브라우징을 우선 구현
+
+### 우선순위 낮음 / 보류
 
 - [ ] cc-proxy-stop 시 usage 데이터 손실 문제
   - CLIProxyAPI 바이너리 수준 이슈, hot-reload 불가
