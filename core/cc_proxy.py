@@ -893,6 +893,16 @@ def _management_api(provider, endpoint, secret="cc"):
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _proxy_api(provider, path, timeout=5):
+    """GET arbitrary path from a running provider proxy (no management auth)."""
+    import urllib.request
+    port = PORTS[provider]
+    url = "http://{}:{}/{}".format(HOST, port, path.lstrip("/"))
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
 def _read_secret_key(base_dir, provider):
     """Return plaintext secret key for management API Bearer auth.
 
@@ -996,7 +1006,26 @@ def _aggregate_per_account(usage_data):
     return account_stats
 
 
-def _print_status_dashboard(base_dir, provider, status, W):
+def _prefetch_provider_data(base_dir, provider):
+    """Fetch all management data for a provider (designed for parallel threading)."""
+    import urllib.error
+    result = {"status": None, "auth_data": None, "usage_data": None, "auth_error": False}
+    result["status"] = get_status(base_dir, provider)
+    if result["status"]["running"] and result["status"]["healthy"]:
+        try:
+            secret = _read_secret_key(base_dir, provider)
+            result["auth_data"] = _management_api(provider, "auth-files", secret)
+            result["usage_data"] = _management_api(provider, "usage", secret)
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                result["auth_error"] = True
+        except Exception:
+            pass
+    return result
+
+
+def _print_status_dashboard(base_dir, provider, status, W,
+                            auth_data=None, usage_data=None, auth_error=False):
     """Print rich dashboard panel for a provider."""
     running = status["running"]
     healthy = status["healthy"]
@@ -1009,22 +1038,16 @@ def _print_status_dashboard(base_dir, provider, status, W):
         dot_str = _C_DIM + "\u25cb" + _C_RESET
         state_str = _C_DIM + "stopped" + _C_RESET
 
-    # --- fetch management data if running ---
-    auth_data = None
-    usage_data = None
-    if running and healthy:
-        try:
-            secret = _read_secret_key(base_dir, provider)
-            auth_data = _management_api(provider, "auth-files", secret)
-            usage_data = _management_api(provider, "usage", secret)
-        except Exception:
-            pass
-
     files = auth_data.get("files", []) if auth_data else []
     acct_suffix = "  {} accounts".format(len(files)) if files else ""
     header = "  {}  :{}   {} {}{}".format(provider, port, dot_str, state_str, acct_suffix)
     print(_box_sep(W))
     print(_box_line(header, W))
+
+    if auth_error:
+        hint = _C_RED + "  auth failed" + _C_RESET + " \u2014 set CC_PROXY_SECRET env var"
+        print(_box_line(hint, W))
+        return
 
     # No data to display: compact view
     u = usage_data.get("usage", {}) if usage_data else {}
@@ -1040,12 +1063,22 @@ def _print_status_dashboard(base_dir, provider, status, W):
     for f in files:
         email = f.get("email", f.get("name", "?"))
         disabled = f.get("disabled", False)
-        if disabled:
+        unavailable = f.get("unavailable", False)
+        status_field = f.get("status", "")
+        last_refresh = f.get("last_refresh", "")
+        plan_type = (f.get("id_token") or {}).get("plan_type", "")
+        time_str = _time_ago(last_refresh) if last_refresh else ""
+        if disabled or status_field == "disabled":
             acct_status = _C_RED + "disabled" + _C_RESET
+        elif unavailable or status_field == "unavailable":
+            acct_status = _C_RED + "unavail " + _C_RESET
         else:
-            acct_status = _C_GREEN + "active" + _C_RESET
-        # content=64: "  " + email[:44) + "  " + status(visible=8)
-        row = "  {:<44}  {}".format(email[:44], acct_status)
+            acct_status = _C_GREEN + (status_field or "active") + _C_RESET
+        label = email
+        if plan_type:
+            suffix = " [{}]".format(plan_type)
+            label = email[:max(0, 28 - len(suffix))] + suffix
+        row = "  {:<34}  {:>8}  {}".format(label[:34], time_str, acct_status)
         print(_box_line(row, W))
 
     # --- usage section ---
@@ -1120,6 +1153,182 @@ def _print_status_dashboard(base_dir, provider, status, W):
             print(_box_line(row, W))
 
     print(_box_line("", W))
+
+
+def _print_check_panel(provider, status, W, auth_data, models_per_account, proxy_models, auth_error):
+    """Print per-credential validation panel for cc-proxy-check."""
+    running = status["running"]
+    healthy = status["healthy"]
+    port = PORTS[provider]
+    divider = "  " + "\u2500" * (W - 6)
+
+    if running:
+        dot_str = _C_GREEN + "\u25cf" + _C_RESET
+        state_str = "running"
+    else:
+        dot_str = _C_DIM + "\u25cb" + _C_RESET
+        state_str = _C_DIM + "stopped" + _C_RESET
+
+    files = auth_data.get("files", []) if auth_data else []
+    acct_suffix = "  {} accounts".format(len(files)) if files else ""
+    header = "  {}  :{}   {} {}{}".format(provider, port, dot_str, state_str, acct_suffix)
+    print(_box_sep(W))
+    print(_box_line(header, W))
+
+    if not running or not healthy:
+        return
+
+    if auth_error:
+        hint = _C_RED + "  auth failed" + _C_RESET + " \u2014 set CC_PROXY_SECRET env var"
+        print(_box_line(hint, W))
+        return
+
+    if not files and not proxy_models:
+        print(_box_line("  No credentials found", W))
+        return
+
+    # --- account validation section ---
+    print(_box_line("", W))
+    print(_box_line("  Account Validation", W))
+    print(_box_line(divider, W))
+
+    all_ok = True
+    for f in files:
+        email = f.get("email", f.get("name", "?"))
+        name = f.get("name", "")
+        disabled = f.get("disabled", False)
+        unavailable = f.get("unavailable", False)
+        status_field = f.get("status", "")
+        last_refresh = f.get("last_refresh", "")
+        plan_type = (f.get("id_token") or {}).get("plan_type", "")
+        time_str = _time_ago(last_refresh) if last_refresh else ""
+
+        model_list = models_per_account.get(name)
+        if model_list is None:
+            mc_str = "       \u2014"  # fetch failed
+        else:
+            mc = len(model_list)
+            mc_str = "{:>2} models".format(mc) if mc > 0 else " 0 models"
+
+        if disabled or status_field == "disabled":
+            indicator = _C_DIM + "\u25cb" + _C_RESET
+            st_str = _C_DIM + "disabled" + _C_RESET
+            all_ok = False
+        elif unavailable or status_field == "unavailable":
+            indicator = _C_RED + "\u00d7" + _C_RESET
+            st_str = _C_RED + "unavail " + _C_RESET
+            all_ok = False
+        elif model_list is not None and len(model_list) == 0:
+            indicator = _C_RED + "\u00d7" + _C_RESET
+            st_str = _C_RED + "no models" + _C_RESET
+            all_ok = False
+        else:
+            indicator = _C_GREEN + "\u25cf" + _C_RESET
+            st_str = _C_GREEN + (status_field or "active") + _C_RESET
+
+        label = email
+        if plan_type:
+            suffix = " [{}]".format(plan_type)
+            label = email[:max(0, 26 - len(suffix))] + suffix
+
+        # Row: "  " label(26) "  " mc_str(9) "  " time(8) "  " indicator " " st_str
+        # visible: 2+26+2+9+2+8+2+1+1+status ≈ 53+status
+        row = "  {:<26}  {:>9}  {:>8}  {} {}".format(
+            label[:26], mc_str, time_str, indicator, st_str
+        )
+        print(_box_line(row, W))
+
+    # verdict
+    print(_box_line("", W))
+    if not files:
+        verdict = "  No accounts configured"
+    elif all_ok:
+        verdict = _C_GREEN + "  \u2714 All accounts OK" + _C_RESET
+    else:
+        verdict = _C_RED + "  \u26a0 Some accounts degraded" + _C_RESET
+    print(_box_line(verdict, W))
+
+    # --- available models section ---
+    if proxy_models:
+        model_ids = sorted(m.get("id", "") for m in proxy_models.get("data", []))
+        if model_ids:
+            print(_box_line("", W))
+            print(_box_line("  Available Models ({})".format(len(model_ids)), W))
+            print(_box_line(divider, W))
+            for mid in model_ids:
+                print(_box_line("    {}".format(mid[:60]), W))
+
+    print(_box_line("", W))
+
+
+def cmd_check(base_dir, provider=None):
+    """Validate credentials and show per-account model availability."""
+    import threading
+    import urllib.request
+    import urllib.error
+    import urllib.parse
+
+    targets = [provider] if provider else list(PROVIDERS)
+    W = 68
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    print(_box_top(W))
+    title = "  cc-proxy check"
+    padding = W - 4 - len(title) - len(now_str)
+    print(_box_line(title + " " * max(1, padding) + now_str, W))
+
+    for pvd in targets:
+        s = get_status(base_dir, pvd)
+        auth_data = None
+        models_per_account = {}
+        proxy_models = None
+        auth_error = False
+
+        if s["running"] and s["healthy"]:
+            secret = _read_secret_key(base_dir, pvd)
+
+            try:
+                auth_data = _management_api(pvd, "auth-files", secret)
+            except urllib.error.HTTPError as e:
+                if e.code == 401:
+                    auth_error = True
+            except Exception:
+                pass
+
+            if auth_data and not auth_error:
+                files = auth_data.get("files", [])
+
+                def _fetch_models(f, out, _pvd=pvd, _secret=secret):
+                    name = f.get("name", "")
+                    if not name:
+                        return
+                    try:
+                        qs = "auth-files/models?name={}".format(
+                            urllib.parse.quote(name, safe="@.-_")
+                        )
+                        data = _management_api(_pvd, qs, _secret)
+                        out[name] = data.get("models", [])
+                    except Exception:
+                        out[name] = None
+
+                fetch_threads = [
+                    threading.Thread(target=_fetch_models, args=(f, models_per_account))
+                    for f in files
+                ]
+                for t in fetch_threads:
+                    t.start()
+                for t in fetch_threads:
+                    t.join(timeout=8)
+
+            try:
+                proxy_models = _proxy_api(pvd, "v1/models")
+            except Exception:
+                pass
+
+        _print_check_panel(pvd, s, W, auth_data, models_per_account, proxy_models, auth_error)
+
+    print(_box_bottom(W))
+    return 0
 
 
 def run_auth(base_dir, provider):
@@ -1365,17 +1574,37 @@ def main():
         if provider and provider not in PROVIDERS:
             print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
             return 1
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         W = 68
         print(_box_top(W))
         title = "  cc-proxy status"
         padding = W - 4 - len(title) - len(now_str)
         print(_box_line(title + " " * max(1, padding) + now_str, W))
+        import threading
+        prefetched = {}
+        def _do_fetch(pvd, out):
+            out[pvd] = _prefetch_provider_data(base_dir, pvd)
+        fetch_threads = [threading.Thread(target=_do_fetch, args=(pvd, prefetched)) for pvd in targets]
+        for t in fetch_threads:
+            t.start()
+        for t in fetch_threads:
+            t.join(timeout=10)
         for pvd in targets:
-            s = get_status(base_dir, pvd)
-            _print_status_dashboard(base_dir, pvd, s, W)
+            data = prefetched.get(pvd, {})
+            s = data.get("status") or get_status(base_dir, pvd)
+            _print_status_dashboard(base_dir, pvd, s, W,
+                                    auth_data=data.get("auth_data"),
+                                    usage_data=data.get("usage_data"),
+                                    auth_error=data.get("auth_error", False))
         print(_box_bottom(W))
         return 0
+
+    elif cmd == "check":
+        provider = args[1] if len(args) > 1 else None
+        if provider and provider not in PROVIDERS:
+            print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
+            return 1
+        return cmd_check(base_dir, provider)
 
     elif cmd == "links":
         if len(args) > 2:
