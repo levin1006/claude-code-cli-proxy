@@ -49,6 +49,7 @@
   - CLIProxyAPI 바이너리 수준 이슈, hot-reload 불가
   - 가능한 우회: stop 전 usage 스냅샷 저장?
 
+- [x] accounts와 accounts validation 탭이 거의 중복되므로 account validation 정보를 accounts로 옮기기 (accounts validation 정보가 이모지도 있고 모델 개수도 있고 더 풍부함)
 
 - [ ] cc-proxy.py 코드가 너무 길어짐. 모듈화하여 접근성을 높여야 함
 
@@ -60,9 +61,9 @@
 
 - [ ] 파일(토큰) 열람 및 삭제 기능
 
-- [ ] quota 캐싱 (TTL 30초)
+- [x] quota 캐싱 (TTL 30초)
   - `/tmp/cc-proxy-quota-{provider}-{md5(auth_index)[:12]}.json` 계정별 캐시 파일
-  - 60초 이내 재호출 시 upstream API 생략 → rate limit 방지
+  - 30초 이내 재호출 시 upstream API 생략 → rate limit 방지
   - `watch -n 10 cc-proxy-quota` 수준의 polling 안전하게 사용 가능
 
 - [x] --short / -s 압축 뷰
