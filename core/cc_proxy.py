@@ -1046,8 +1046,13 @@ def _aggregate_per_account(usage_data):
 
 def _prefetch_provider_data(base_dir, provider):
     """Fetch all management data for a provider (designed for parallel threading)."""
+    import threading
     import urllib.error
-    result = {"status": None, "auth_data": None, "usage_data": None, "auth_error": False}
+    import urllib.parse
+    result = {
+        "status": None, "auth_data": None, "usage_data": None,
+        "auth_error": False, "models_per_account": {},
+    }
     result["status"] = get_status(base_dir, provider)
     if result["status"]["running"] and result["status"]["healthy"]:
         try:
@@ -1059,11 +1064,38 @@ def _prefetch_provider_data(base_dir, provider):
                 result["auth_error"] = True
         except Exception:
             pass
+
+        # Fetch per-account model lists in parallel (used to detect routing-pool exclusions)
+        if result["auth_data"] and not result["auth_error"]:
+            files = result["auth_data"].get("files", [])
+            mpa = result["models_per_account"]
+            secret = _read_secret_key(base_dir, provider)
+
+            def _fetch_one(f, out, _pvd=provider, _sec=secret):
+                name = f.get("name", "")
+                if not name:
+                    return
+                try:
+                    qs = "auth-files/models?name={}".format(
+                        urllib.parse.quote(name, safe="@.-_")
+                    )
+                    data = _management_api(_pvd, qs, _sec)
+                    out[name] = data.get("models", [])
+                except Exception:
+                    out[name] = None
+
+            threads = [threading.Thread(target=_fetch_one, args=(f, mpa)) for f in files]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=5)
+
     return result
 
 
 def _print_status_dashboard(base_dir, provider, status, W,
-                            auth_data=None, usage_data=None, auth_error=False):
+                            auth_data=None, usage_data=None, auth_error=False,
+                            models_per_account=None):
     """Print rich dashboard panel for a provider."""
     running = status["running"]
     healthy = status["healthy"]
@@ -1100,10 +1132,21 @@ def _print_status_dashboard(base_dir, provider, status, W,
     print(_box_line(divider, W))
     for f in files:
         email = f.get("email", f.get("name", "?"))
+        name  = f.get("name", "")
         last_refresh = f.get("last_refresh", "")
         plan_type = (f.get("id_token") or {}).get("plan_type", "")
         time_str = _time_ago(last_refresh) if last_refresh else ""
         _ind, acct_status, _deg = _acct_status_label(f)
+
+        # Override: proxy-active but 0 models → not in routing pool
+        if (models_per_account is not None
+                and not f.get("disabled", False)
+                and f.get("status", "") not in ("error",)
+                and not f.get("unavailable", False)):
+            ml = models_per_account.get(name)
+            if ml is not None and len(ml) == 0:
+                acct_status = _C_DIM + "no models" + _C_RESET
+
         label = email
         if plan_type:
             suffix = " [{}]".format(plan_type)
@@ -1619,7 +1662,8 @@ def main():
             _print_status_dashboard(base_dir, pvd, s, W,
                                     auth_data=data.get("auth_data"),
                                     usage_data=data.get("usage_data"),
-                                    auth_error=data.get("auth_error", False))
+                                    auth_error=data.get("auth_error", False),
+                                    models_per_account=data.get("models_per_account"))
         print(_box_bottom(W))
         return 0
 
