@@ -41,7 +41,8 @@ cc-ag-gemini()  { _cc_proxy run ag-gemini -- "$@"; }
 # Management
 cc-proxy-start-all()  { _cc_proxy start      all; }
 cc-proxy-status()     { _cc_proxy status     "$@"; }
-cc-proxy-check()      { _cc_proxy check      "$@"; }
+cc-proxy-check()      { _cc_proxy status --check "$@"; }  # alias → status --check
+cc-proxy-quota()      { _cc_proxy status --quota "$@"; }
 cc-proxy-links()      { _cc_proxy links      "$@"; }
 cc-proxy-stop()       { _cc_proxy stop       "$@"; }
 cc-proxy-auth()       { _cc_proxy auth       "$@"; }

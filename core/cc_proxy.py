@@ -966,6 +966,172 @@ def _fmt_local_dt(iso_str):
     return local_dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _fmt_reset_time(value):
+    """seconds (int) or ISO string → '2h14m', '6d14h', '' on failure."""
+    if value is None:
+        return ""
+    if isinstance(value, (int, float)):
+        secs = int(value)
+    else:
+        dt = _parse_iso(str(value))
+        if not dt:
+            return ""
+        from datetime import datetime, timezone
+        secs = int((dt - datetime.now(timezone.utc)).total_seconds())
+    if secs <= 0:
+        return "now"
+    days, rem = divmod(secs, 86400)
+    hours, rem = divmod(rem, 3600)
+    mins = rem // 60
+    if days:
+        return "{}d{}h".format(days, hours)
+    if hours:
+        return "{}h{}m".format(hours, mins)
+    return "{}m".format(mins)
+
+
+def _fmt_quota_bar(remaining_pct):
+    """0-100 → colored '████████░░  80%' (10-block bar + percentage)."""
+    pct = max(0, min(100, int(remaining_pct)))
+    filled = round(pct / 10)
+    bar = "\u2588" * filled + "\u2591" * (10 - filled)
+    if pct >= 80:
+        color = ""          # default
+    elif pct >= 40:
+        color = "\033[33m"  # yellow
+    else:
+        color = _C_RED
+    reset = _C_RESET if color else ""
+    return "{}{}{} {:>3}%".format(color, bar, reset, pct)
+
+
+def _management_api_call(provider, secret, auth_index, method, url, headers, body=None):
+    """POST /v0/management/api-call → (upstream_status_code, parsed_body_dict).
+
+    Returns (None, None) on network/management error.
+    Upstream 4xx/5xx returned as-is so callers can handle them.
+    """
+    import urllib.request, urllib.error
+    port = PORTS[provider]
+    endpoint = "http://127.0.0.1:{}/v0/management/api-call".format(port)
+    payload = {"authIndex": auth_index, "method": method, "url": url, "header": headers}
+    if body:
+        payload["data"] = body
+    raw = json.dumps(payload).encode()
+    req = urllib.request.Request(endpoint, data=raw,
+                                 headers={"Authorization": "Bearer " + secret,
+                                          "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            outer = json.loads(resp.read())
+        status_code = outer.get("status_code", 0)
+        try:
+            parsed_body = json.loads(outer.get("body", "{}"))
+        except Exception:
+            parsed_body = {}
+        return status_code, parsed_body
+    except Exception:
+        return None, None
+
+
+def _fetch_quota_antigravity(provider, secret, auth_index):
+    """fetchAvailableModels → {model_id: {"remaining_pct": int, "reset_str": str}}"""
+    url = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
+    headers = {
+        "Authorization": "Bearer $TOKEN$",
+        "Content-Type": "application/json",
+        "User-Agent": "antigravity/1.11.5 windows/amd64",
+    }
+    status_code, data = _management_api_call(provider, secret, auth_index, "POST", url, headers, "{}")
+    if data is None:
+        return None
+    if status_code != 200:
+        err = (data.get("error") or {}).get("message", "HTTP {}".format(status_code))
+        return {"__error__": {"display": "error", "remaining_pct": 0, "reset_str": err[:40]}}
+    result = {}
+    for model_id, minfo in data.get("models", {}).items():
+        qi = minfo.get("quotaInfo", {})
+        frac = qi.get("remainingFraction")
+        if frac is None:
+            continue
+        reset_str = _fmt_reset_time(qi.get("resetTime", ""))
+        display = minfo.get("displayName", model_id)
+        result[model_id] = {
+            "display": display,
+            "remaining_pct": int(round(frac * 100)),
+            "reset_str": reset_str,
+        }
+    return result
+
+
+def _fetch_quota_claude(provider, secret, auth_index):
+    """oauth/usage → {window_name: {"remaining_pct": int, "reset_str": str}}"""
+    url = "https://api.anthropic.com/api/oauth/usage"
+    headers = {
+        "Authorization": "Bearer $TOKEN$",
+        "Content-Type": "application/json",
+        "anthropic-beta": "oauth-2025-04-20",
+    }
+    status_code, data = _management_api_call(provider, secret, auth_index, "GET", url, headers)
+    if data is None:
+        return None
+    if status_code != 200:
+        err = (data.get("error") or {}).get("message", "HTTP {}".format(status_code))
+        return {"__error__": {"display": "error", "remaining_pct": 0, "reset_str": err[:40]}}
+    result = {}
+    window_labels = {
+        "five_hour":      "5h window",
+        "seven_day":      "7d window",
+        "seven_day_opus": "7d opus",
+        "seven_day_sonnet": "7d sonnet",
+    }
+    for key, label in window_labels.items():
+        w = data.get(key)
+        if not w:
+            continue
+        util = w.get("utilization")
+        if util is None:
+            continue
+        remaining_pct = max(0, 100 - int(round(util)))
+        reset_str = _fmt_reset_time(w.get("resets_at", ""))
+        result[key] = {"display": label, "remaining_pct": remaining_pct, "reset_str": reset_str}
+    return result
+
+
+def _fetch_quota_codex(provider, secret, auth_index):
+    """wham/usage → {window: {"remaining_pct": int, "reset_str": str}}"""
+    url = "https://chatgpt.com/backend-api/wham/usage"
+    headers = {
+        "Authorization": "Bearer $TOKEN$",
+        "Content-Type": "application/json",
+        "User-Agent": "codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal",
+    }
+    status_code, data = _management_api_call(provider, secret, auth_index, "GET", url, headers)
+    if data is None:
+        return None
+    if status_code != 200:
+        err = (data.get("error") or {}).get("message", "HTTP {}".format(status_code))
+        return {"__error__": {"display": "error", "remaining_pct": 0, "reset_str": err[:40]}}
+    result = {}
+    rl = data.get("rate_limit", {})
+    for wkey, label in [("primary_window", "5h window"), ("secondary_window", "7d window")]:
+        w = rl.get(wkey)
+        if not w:
+            continue
+        used_pct = w.get("used_percent", 0) or 0
+        remaining_pct = max(0, 100 - int(round(used_pct)))
+        reset_str = _fmt_reset_time(w.get("reset_after_seconds"))
+        result[wkey] = {"display": label, "remaining_pct": remaining_pct, "reset_str": reset_str}
+    return result
+
+
+_QUOTA_FETCHERS = {
+    "antigravity": _fetch_quota_antigravity,
+    "claude":      _fetch_quota_claude,
+    "codex":       _fetch_quota_codex,
+}
+
+
 # ANSI color codes (empty string fallback keeps output clean when piped)
 _C_GREEN  = "\033[32m"
 _C_RED    = "\033[31m"
@@ -1060,14 +1226,20 @@ def _aggregate_per_account(usage_data):
     return account_stats
 
 
-def _prefetch_provider_data(base_dir, provider):
-    """Fetch all management data for a provider (designed for parallel threading)."""
+def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=False):
+    """Fetch all management data for a provider (designed for parallel threading).
+
+    fetch_quota: also call upstream provider quota APIs (slower, ~3-5s per account)
+    fetch_check: also fetch per-account model lists from management API
+    """
     import threading
     import urllib.error
     import urllib.parse
     result = {
         "status": None, "auth_data": None, "usage_data": None,
         "auth_error": False, "models_per_account": {},
+        "quota_data": {},   # {account_name: quota_dict or None}
+        "proxy_models": None,
     }
     result["status"] = get_status(base_dir, provider)
     if result["status"]["running"] and result["status"]["healthy"]:
@@ -1081,38 +1253,72 @@ def _prefetch_provider_data(base_dir, provider):
         except Exception:
             pass
 
-        # Fetch per-account model lists in parallel (used to detect routing-pool exclusions)
         if result["auth_data"] and not result["auth_error"]:
             files = result["auth_data"].get("files", [])
-            mpa = result["models_per_account"]
             secret = _read_secret_key(base_dir, provider)
+            threads = []
 
-            def _fetch_one(f, out, _pvd=provider, _sec=secret):
-                name = f.get("name", "")
-                if not name:
-                    return
-                try:
-                    qs = "auth-files/models?name={}".format(
-                        urllib.parse.quote(name, safe="@.-_")
-                    )
-                    data = _management_api(_pvd, qs, _sec)
-                    out[name] = data.get("models", [])
-                except Exception:
-                    out[name] = None
+            # per-account model lists (for routing-pool detection)
+            if fetch_check:
+                mpa = result["models_per_account"]
 
-            threads = [threading.Thread(target=_fetch_one, args=(f, mpa)) for f in files]
+                def _fetch_models(f, out, _pvd=provider, _sec=secret):
+                    name = f.get("name", "")
+                    if not name:
+                        return
+                    try:
+                        qs = "auth-files/models?name={}".format(
+                            urllib.parse.quote(name, safe="@.-_")
+                        )
+                        data = _management_api(_pvd, qs, _sec)
+                        out[name] = data.get("models", [])
+                    except Exception:
+                        out[name] = None
+
+                threads += [threading.Thread(target=_fetch_models, args=(f, mpa))
+                            for f in files]
+
+            # per-account upstream quota
+            if fetch_quota and provider in _QUOTA_FETCHERS:
+                fetcher = _QUOTA_FETCHERS[provider]
+                qpa = result["quota_data"]
+
+                def _fetch_quota_one(f, out, _pvd=provider, _sec=secret, _fn=fetcher):
+                    name = f.get("name", "")
+                    auth_index = f.get("auth_index", "")
+                    if not name or not auth_index:
+                        return
+                    out[name] = _fn(_pvd, _sec, auth_index)
+
+                threads += [threading.Thread(target=_fetch_quota_one, args=(f, qpa))
+                            for f in files]
+
+            # proxy model list (for check panel)
+            if fetch_check:
+                def _fetch_proxy_models(_pvd=provider):
+                    try:
+                        result["proxy_models"] = _proxy_api(_pvd, "v1/models")
+                    except Exception:
+                        pass
+                threads.append(threading.Thread(target=_fetch_proxy_models))
+
             for t in threads:
                 t.start()
             for t in threads:
-                t.join(timeout=5)
+                t.join(timeout=10)
 
     return result
 
 
 def _print_status_dashboard(base_dir, provider, status, W,
                             auth_data=None, usage_data=None, auth_error=False,
-                            models_per_account=None):
-    """Print rich dashboard panel for a provider."""
+                            models_per_account=None, quota_data=None,
+                            proxy_models=None, show_check=False):
+    """Print rich dashboard panel for a provider.
+
+    quota_data:    {account_name: quota_dict} — show Quota section when present
+    show_check:    show Account Validation + Available Models section (replaces cc-proxy-check)
+    """
     running = status["running"]
     healthy = status["healthy"]
     port = PORTS[provider]
@@ -1241,200 +1447,138 @@ def _print_status_dashboard(base_dir, provider, status, W,
             last_tok = adata["last_tok"]
             dt_str   = _fmt_local_dt(adata["last_time"]) if adata["last_time"] else ""
 
-            # req: total(green_ok/red_fail) — always show fail count even if 0
-            req_vis = "{}({}/{})".format(total, ok, fails)
-            req_str = "{}({}/{})".format(
+            # req: right-aligned columns  total  ok  fail (no parentheses)
+            req_vis = "{:>3}  {:>3}  {:>3}".format(total, ok, fails)
+            req_str = "{:>3}  {}{:>3}{}  {}{:>3}{}".format(
                 total,
-                _C_GREEN + str(ok)    + _C_RESET,
-                _C_RED   + str(fails) + _C_RESET,
+                _C_GREEN, ok,    _C_RESET,
+                _C_RED,   fails, _C_RESET,
             )
-            pad = max(0, 10 - len(req_vis))
-            req_padded = " " * pad + req_str
 
-            # last request: "YYYY-MM-DD HH:MM:SS  dim(last_tok)/total_tok"
-            tok_str = "{}{}{}/{}".format(
-                _C_DIM, _fmt_tokens(last_tok), _C_RESET, _fmt_tokens(tok)
-            ) if dt_str else _fmt_tokens(tok)
-            tok_vis = "{}/{}".format(_fmt_tokens(last_tok), _fmt_tokens(tok)) if dt_str else _fmt_tokens(tok)
-            tok_pad = max(0, 13 - len(tok_vis))
-            tok_padded = " " * tok_pad + tok_str
-            row = "    {:<20}  {}  {}  {}".format(
-                acct[:20], req_padded, dt_str, tok_padded
+            # Format: dim(last_tok) / total_tok  dim(· datetime)
+            # last_tok and datetime share dim color for visual grouping;
+            # total_tok is default color as the primary value.
+            last_tok_s  = _fmt_tokens(last_tok)
+            total_tok_s = _fmt_tokens(tok)
+            if dt_str:
+                tok_vis = "{} / {} · {}".format(last_tok_s, total_tok_s, dt_str)
+                tok_str = "{}{}{} / {}{} · {}{}".format(
+                    _C_DIM, last_tok_s, _C_RESET,
+                    total_tok_s,
+                    _C_DIM, dt_str, _C_RESET,
+                )
+            else:
+                tok_vis = total_tok_s
+                tok_str = total_tok_s
+            row = "    {:<20}  {}  {}".format(
+                acct[:20], req_str, tok_str
             )
             print(_box_line(row, W))
 
-    print(_box_line("", W))
+    # --- quota section (shown when --quota flag used) ---
+    if quota_data:
+        QUOTA_MODELS = {
+            "antigravity": {"gemini-3.1-pro-high", "gemini-3.1-pro-low",
+                            "gemini-3-flash", "claude-sonnet-4-6",
+                            "claude-opus-4-6-thinking", "gpt-oss-120b-medium"},
+        }
+        shown_models = QUOTA_MODELS.get(provider, None)  # None = show all
+        print(_box_line("", W))
+        qdiv = "  \u2500\u2500 quota " + "\u2500" * max(0, W - 16)
+        print(_box_line(qdiv, W))
+        for f in files:
+            name = f.get("name", "")
+            email = f.get("email", f.get("name", "?"))
+            plan_type = (f.get("id_token") or {}).get("plan_type", "")
+            label = email
+            if plan_type:
+                suffix = " [{}]".format(plan_type)
+                label = email[:max(0, 28 - len(suffix))] + suffix
+            qd = quota_data.get(name)
+            if qd is None:
+                print(_box_line("  {}  {}(unavailable){}".format(
+                    label[:30], _C_DIM, _C_RESET), W))
+                continue
+            # __error__: upstream returned non-200
+            if "__error__" in qd:
+                einfo = qd["__error__"]
+                msg = einfo.get("reset_str", "error")
+                print(_box_line("  {}  {}\u00d7 {}{}".format(
+                    label[:26], _C_RED, msg[:35], _C_RESET), W))
+                continue
+            if not qd:
+                print(_box_line("  {}  {}(no quota data){}".format(
+                    label[:26], _C_DIM, _C_RESET), W))
+                continue
+            print(_box_line("  {}".format(label[:34]), W))
+            # Show models sorted by remaining (ascending — show depleted first)
+            items = sorted(qd.items(), key=lambda x: x[1]["remaining_pct"])
+            for model_id, info in items:
+                if shown_models and model_id not in shown_models:
+                    continue
+                display = info.get("display", model_id)
+                bar = _fmt_quota_bar(info["remaining_pct"])
+                reset = info["reset_str"]
+                reset_col = "  resets {}".format(reset) if reset else ""
+                row = "    {:<26}  {}{}".format(display[:26], bar, reset_col)
+                print(_box_line(row, W))
 
-
-def _print_check_panel(provider, status, W, auth_data, models_per_account, proxy_models, auth_error):
-    """Print per-credential validation panel for cc-proxy-check."""
-    running = status["running"]
-    healthy = status["healthy"]
-    port = PORTS[provider]
-    divider = "  " + "\u2500" * (W - 6)
-
-    if running:
-        dot_str = _C_GREEN + "\u25cf" + _C_RESET
-        state_str = "running"
-    else:
-        dot_str = _C_DIM + "\u25cb" + _C_RESET
-        state_str = _C_DIM + "stopped" + _C_RESET
-
-    files = auth_data.get("files", []) if auth_data else []
-    acct_suffix = "  {} accounts".format(len(files)) if files else ""
-    header = "  {}  :{}   {} {}{}".format(provider, port, dot_str, state_str, acct_suffix)
-    print(_box_sep(W))
-    print(_box_line(header, W))
-
-    if not running or not healthy:
-        return
-
-    if auth_error:
-        hint = _C_RED + "  auth failed" + _C_RESET + " \u2014 set CC_PROXY_SECRET env var"
-        print(_box_line(hint, W))
-        return
-
-    if not files and not proxy_models:
-        print(_box_line("  No credentials found", W))
-        return
-
-    # --- account validation section ---
-    print(_box_line("", W))
-    print(_box_line("  Account Validation", W))
-    print(_box_line(divider, W))
-
-    all_ok = True
-    for f in files:
-        email = f.get("email", f.get("name", "?"))
-        name = f.get("name", "")
-        last_refresh = f.get("last_refresh", "")
-        plan_type = (f.get("id_token") or {}).get("plan_type", "")
-        time_str = _time_ago(last_refresh) if last_refresh else ""
-
-        model_list = models_per_account.get(name)
-        if model_list is None:
-            mc_str = "       \u2014"  # fetch failed
+    # --- check section (shown when --check flag used) ---
+    if show_check:
+        print(_box_line("", W))
+        cdiv = "  " + "\u2500" * (W - 6)
+        print(_box_line("  Account Validation", W))
+        print(_box_line(cdiv, W))
+        all_ok = True
+        for f in files:
+            email = f.get("email", f.get("name", "?"))
+            name = f.get("name", "")
+            last_refresh = f.get("last_refresh", "")
+            plan_type = (f.get("id_token") or {}).get("plan_type", "")
+            time_str = _time_ago(last_refresh) if last_refresh else ""
+            model_list = models_per_account.get(name) if models_per_account else None
+            mc_str = "       \u2014" if model_list is None else (
+                "{:>2} models".format(len(model_list)) if len(model_list) > 0 else " 0 models"
+            )
+            indicator, st_str, is_degraded = _acct_status_label(f)
+            if (not f.get("disabled", False)
+                    and f.get("status", "") not in ("error",)
+                    and not f.get("unavailable", False)
+                    and model_list is not None
+                    and len(model_list) == 0):
+                indicator = _C_DIM + "\u26a0" + _C_RESET
+                st_str = _C_DIM + "no models" + _C_RESET
+                is_degraded = True
+            if is_degraded:
+                all_ok = False
+            label = email
+            if plan_type:
+                suffix = " [{}]".format(plan_type)
+                label = email[:max(0, 26 - len(suffix))] + suffix
+            row = "  {:<26}  {:>9}  {:>8}  {} {}".format(
+                label[:26], mc_str, time_str, indicator, st_str
+            )
+            print(_box_line(row, W))
+        print(_box_line("", W))
+        if not files:
+            verdict = "  No accounts configured"
+        elif all_ok:
+            verdict = _C_GREEN + "  \u2714 All accounts OK" + _C_RESET
         else:
-            mc = len(model_list)
-            mc_str = "{:>2} models".format(mc) if mc > 0 else " 0 models"
-
-        indicator, st_str, is_degraded = _acct_status_label(f)
-
-        # Active account with 0 models: not in proxy routing pool -> flag as warning
-        if (not f.get("disabled", False)
-                and f.get("status", "") not in ("error",)
-                and not f.get("unavailable", False)
-                and model_list is not None
-                and len(model_list) == 0):
-            indicator = _C_DIM + "\u26a0" + _C_RESET   # ⚠
-            st_str = _C_DIM + "no models" + _C_RESET
-            is_degraded = True
-
-        if is_degraded:
-            all_ok = False
-
-        label = email
-        if plan_type:
-            suffix = " [{}]".format(plan_type)
-            label = email[:max(0, 26 - len(suffix))] + suffix
-
-        row = "  {:<26}  {:>9}  {:>8}  {} {}".format(
-            label[:26], mc_str, time_str, indicator, st_str
-        )
-        print(_box_line(row, W))
-
-    # verdict
-    print(_box_line("", W))
-    if not files:
-        verdict = "  No accounts configured"
-    elif all_ok:
-        verdict = _C_GREEN + "  \u2714 All accounts OK" + _C_RESET
-    else:
-        verdict = _C_RED + "  \u26a0 Some accounts degraded" + _C_RESET
-    print(_box_line(verdict, W))
-
-    # --- available models section ---
-    if proxy_models:
-        model_ids = sorted(m.get("id", "") for m in proxy_models.get("data", []))
-        if model_ids:
-            print(_box_line("", W))
-            print(_box_line("  Available Models ({})".format(len(model_ids)), W))
-            print(_box_line(divider, W))
-            for mid in model_ids:
-                print(_box_line("    {}".format(mid[:60]), W))
+            verdict = _C_RED + "  \u26a0 Some accounts degraded" + _C_RESET
+        print(_box_line(verdict, W))
+        if proxy_models:
+            model_ids = sorted(m.get("id", "") for m in proxy_models.get("data", []))
+            if model_ids:
+                print(_box_line("", W))
+                print(_box_line("  Available Models ({})".format(len(model_ids)), W))
+                print(_box_line(cdiv, W))
+                for mid in model_ids:
+                    print(_box_line("    {}".format(mid[:60]), W))
 
     print(_box_line("", W))
 
 
-def cmd_check(base_dir, provider=None):
-    """Validate credentials and show per-account model availability."""
-    import threading
-    import urllib.request
-    import urllib.error
-    import urllib.parse
-
-    targets = [provider] if provider else list(PROVIDERS)
-    term_w = shutil.get_terminal_size(fallback=(80, 24)).columns
-    W = max(80, min(term_w - 2, 120))
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    print(_box_top(W))
-    title = "  cc-proxy check"
-    padding = W - 4 - len(title) - len(now_str)
-    print(_box_line(title + " " * max(1, padding) + now_str, W))
-
-    for pvd in targets:
-        s = get_status(base_dir, pvd)
-        auth_data = None
-        models_per_account = {}
-        proxy_models = None
-        auth_error = False
-
-        if s["running"] and s["healthy"]:
-            secret = _read_secret_key(base_dir, pvd)
-
-            try:
-                auth_data = _management_api(pvd, "auth-files", secret)
-            except urllib.error.HTTPError as e:
-                if e.code == 401:
-                    auth_error = True
-            except Exception:
-                pass
-
-            if auth_data and not auth_error:
-                files = auth_data.get("files", [])
-
-                def _fetch_models(f, out, _pvd=pvd, _secret=secret):
-                    name = f.get("name", "")
-                    if not name:
-                        return
-                    try:
-                        qs = "auth-files/models?name={}".format(
-                            urllib.parse.quote(name, safe="@.-_")
-                        )
-                        data = _management_api(_pvd, qs, _secret)
-                        out[name] = data.get("models", [])
-                    except Exception:
-                        out[name] = None
-
-                fetch_threads = [
-                    threading.Thread(target=_fetch_models, args=(f, models_per_account))
-                    for f in files
-                ]
-                for t in fetch_threads:
-                    t.start()
-                for t in fetch_threads:
-                    t.join(timeout=8)
-
-            try:
-                proxy_models = _proxy_api(pvd, "v1/models")
-            except Exception:
-                pass
-
-        _print_check_panel(pvd, s, W, auth_data, models_per_account, proxy_models, auth_error)
-
-    print(_box_bottom(W))
-    return 0
 
 
 def run_auth(base_dir, provider):
@@ -1674,57 +1818,66 @@ def main():
         stop_proxy(base_dir, provider)
         return 0
 
-    elif cmd == "status":
-        provider = args[1] if len(args) > 1 else None
-        targets = [provider] if provider else list(PROVIDERS)
+    elif cmd in ("status", "check"):
+        # Parse flags and optional provider from remaining args
+        rest = args[1:]
+        show_quota = "--quota" in rest
+        show_check = (cmd == "check") or ("--check" in rest)
+        positional = [a for a in rest if not a.startswith("--")]
+        provider = positional[0] if positional else None
         if provider and provider not in PROVIDERS:
             print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
             return 1
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        term_w = shutil.get_terminal_size(fallback=(80, 24)).columns
-        # Parallel fetch first so we can compute needed width from actual data
+        targets = [provider] if provider else list(PROVIDERS)
+
         import threading
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         prefetched = {}
+
         def _do_fetch(pvd, out):
-            out[pvd] = _prefetch_provider_data(base_dir, pvd)
-        fetch_threads = [threading.Thread(target=_do_fetch, args=(pvd, prefetched)) for pvd in targets]
+            out[pvd] = _prefetch_provider_data(
+                base_dir, pvd,
+                fetch_quota=show_quota,
+                fetch_check=show_check,
+            )
+
+        fetch_threads = [threading.Thread(target=_do_fetch, args=(pvd, prefetched))
+                         for pvd in targets]
         for t in fetch_threads:
             t.start()
         for t in fetch_threads:
-            t.join(timeout=10)
-        # Compute minimum width from actual data: per-account row is widest
-        # fixed: 4+20+2+10+2+19+2+13 = 72; header title+datetime = ~44
+            t.join(timeout=15)
+
+        # Compute minimum width from actual email lengths
+        term_w = shutil.get_terminal_size(fallback=(80, 24)).columns
         min_content = 72
         for pvd in targets:
             d = prefetched.get(pvd, {})
             for f in (d.get("auth_data") or {}).get("files", []):
                 email = f.get("email") or f.get("name") or ""
-                # Accounts row: "  " + email + "  " + time_ago(8) + "  " + status(~12) = email+24
                 min_content = max(min_content, len(email) + 24)
-        # +4 for "║ " and " ║" borders
-        needed_w = min_content + 4
-        W = max(needed_w, min(term_w - 2, 120))
+        W = max(min_content + 4, min(term_w - 2, 120))
+
+        flags = ("--quota " if show_quota else "") + ("--check" if show_check else "")
+        title = "  cc-proxy status {}".format(flags).rstrip()
         print(_box_top(W))
-        title = "  cc-proxy status"
         padding = W - 4 - len(title) - len(now_str)
         print(_box_line(title + " " * max(1, padding) + now_str, W))
         for pvd in targets:
             data = prefetched.get(pvd, {})
             s = data.get("status") or get_status(base_dir, pvd)
-            _print_status_dashboard(base_dir, pvd, s, W,
-                                    auth_data=data.get("auth_data"),
-                                    usage_data=data.get("usage_data"),
-                                    auth_error=data.get("auth_error", False),
-                                    models_per_account=data.get("models_per_account"))
+            _print_status_dashboard(
+                base_dir, pvd, s, W,
+                auth_data=data.get("auth_data"),
+                usage_data=data.get("usage_data"),
+                auth_error=data.get("auth_error", False),
+                models_per_account=data.get("models_per_account"),
+                quota_data=data.get("quota_data") if show_quota else None,
+                proxy_models=data.get("proxy_models"),
+                show_check=show_check,
+            )
         print(_box_bottom(W))
         return 0
-
-    elif cmd == "check":
-        provider = args[1] if len(args) > 1 else None
-        if provider and provider not in PROVIDERS:
-            print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
-            return 1
-        return cmd_check(base_dir, provider)
 
     elif cmd == "links":
         if len(args) > 2:
