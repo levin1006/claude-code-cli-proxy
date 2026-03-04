@@ -991,6 +991,44 @@ def _box_sep(width):
     return "\u2560" + "\u2550" * (width - 2) + "\u2563"
 
 
+def _acct_status_label(f):
+    """Compute (indicator_str, status_str, is_degraded) for an auth-file entry.
+
+    Degraded = permanent errors (403, 401) or explicitly disabled.
+    Temporary rate limits (429) are shown as 'limited' but NOT degraded.
+    """
+    disabled     = f.get("disabled", False)
+    unavailable  = f.get("unavailable", False)
+    status_field = f.get("status", "")
+    msg          = f.get("status_message", "")
+
+    # Extract upstream HTTP error code from status_message JSON if present
+    http_code = None
+    if msg:
+        try:
+            http_code = json.loads(msg).get("error", {}).get("code")
+        except Exception:
+            pass
+
+    if disabled or status_field == "disabled":
+        return _C_DIM + "\u25cb" + _C_RESET, _C_DIM + "disabled" + _C_RESET, False
+
+    if unavailable or status_field == "error":
+        if http_code == 429:
+            # Temporary rate limit — account will recover
+            return (_C_DIM + "\u26a1" + _C_RESET,
+                    _C_DIM + "limited " + _C_RESET, False)
+        elif http_code == 403:
+            return _C_RED + "\u00d7" + _C_RESET, _C_RED + "denied  " + _C_RESET, True
+        elif http_code == 401:
+            return _C_RED + "\u00d7" + _C_RESET, _C_RED + "expired " + _C_RESET, True
+        else:
+            return _C_RED + "\u00d7" + _C_RESET, _C_RED + "error   " + _C_RESET, True
+
+    return (_C_GREEN + "\u25cf" + _C_RESET,
+            _C_GREEN + (status_field or "active") + _C_RESET, False)
+
+
 def _aggregate_per_account(usage_data):
     """Aggregate usage stats per account from /v0/management/usage response."""
     account_stats = {}
@@ -1062,18 +1100,10 @@ def _print_status_dashboard(base_dir, provider, status, W,
     print(_box_line(divider, W))
     for f in files:
         email = f.get("email", f.get("name", "?"))
-        disabled = f.get("disabled", False)
-        unavailable = f.get("unavailable", False)
-        status_field = f.get("status", "")
         last_refresh = f.get("last_refresh", "")
         plan_type = (f.get("id_token") or {}).get("plan_type", "")
         time_str = _time_ago(last_refresh) if last_refresh else ""
-        if disabled or status_field == "disabled":
-            acct_status = _C_RED + "disabled" + _C_RESET
-        elif unavailable or status_field == "unavailable":
-            acct_status = _C_RED + "unavail " + _C_RESET
-        else:
-            acct_status = _C_GREEN + (status_field or "active") + _C_RESET
+        _ind, acct_status, _deg = _acct_status_label(f)
         label = email
         if plan_type:
             suffix = " [{}]".format(plan_type)
@@ -1196,9 +1226,6 @@ def _print_check_panel(provider, status, W, auth_data, models_per_account, proxy
     for f in files:
         email = f.get("email", f.get("name", "?"))
         name = f.get("name", "")
-        disabled = f.get("disabled", False)
-        unavailable = f.get("unavailable", False)
-        status_field = f.get("status", "")
         last_refresh = f.get("last_refresh", "")
         plan_type = (f.get("id_token") or {}).get("plan_type", "")
         time_str = _time_ago(last_refresh) if last_refresh else ""
@@ -1210,29 +1237,26 @@ def _print_check_panel(provider, status, W, auth_data, models_per_account, proxy
             mc = len(model_list)
             mc_str = "{:>2} models".format(mc) if mc > 0 else " 0 models"
 
-        if disabled or status_field == "disabled":
-            indicator = _C_DIM + "\u25cb" + _C_RESET
-            st_str = _C_DIM + "disabled" + _C_RESET
+        indicator, st_str, is_degraded = _acct_status_label(f)
+
+        # Active account with 0 models: not in proxy routing pool -> flag as warning
+        if (not f.get("disabled", False)
+                and f.get("status", "") not in ("error",)
+                and not f.get("unavailable", False)
+                and model_list is not None
+                and len(model_list) == 0):
+            indicator = _C_DIM + "\u26a0" + _C_RESET   # ⚠
+            st_str = _C_DIM + "no models" + _C_RESET
+            is_degraded = True
+
+        if is_degraded:
             all_ok = False
-        elif unavailable or status_field == "unavailable":
-            indicator = _C_RED + "\u00d7" + _C_RESET
-            st_str = _C_RED + "unavail " + _C_RESET
-            all_ok = False
-        elif model_list is not None and len(model_list) == 0:
-            indicator = _C_RED + "\u00d7" + _C_RESET
-            st_str = _C_RED + "no models" + _C_RESET
-            all_ok = False
-        else:
-            indicator = _C_GREEN + "\u25cf" + _C_RESET
-            st_str = _C_GREEN + (status_field or "active") + _C_RESET
 
         label = email
         if plan_type:
             suffix = " [{}]".format(plan_type)
             label = email[:max(0, 26 - len(suffix))] + suffix
 
-        # Row: "  " label(26) "  " mc_str(9) "  " time(8) "  " indicator " " st_str
-        # visible: 2+26+2+9+2+8+2+1+1+status ≈ 53+status
         row = "  {:<26}  {:>9}  {:>8}  {} {}".format(
             label[:26], mc_str, time_str, indicator, st_str
         )
