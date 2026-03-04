@@ -1130,6 +1130,38 @@ _QUOTA_FETCHERS = {
     "codex":       _fetch_quota_codex,
 }
 
+QUOTA_CACHE_TTL = 60  # seconds
+
+
+def _quota_cache_path(provider, auth_index):
+    """Return /tmp cache file path for a given provider + auth_index."""
+    import hashlib
+    key = hashlib.md5("{}:{}".format(provider, auth_index).encode()).hexdigest()[:12]
+    return "/tmp/cc-proxy-quota-{}-{}.json".format(provider, key)
+
+
+def _quota_cache_load(provider, auth_index):
+    """Return cached quota dict if fresh (< TTL), else None."""
+    path = _quota_cache_path(provider, auth_index)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+        if time.time() - cached.get("fetched_at", 0) < QUOTA_CACHE_TTL:
+            return cached["data"]
+    except Exception:
+        pass
+    return None
+
+
+def _quota_cache_save(provider, auth_index, data):
+    """Persist quota dict to cache file with current timestamp."""
+    path = _quota_cache_path(provider, auth_index)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"fetched_at": time.time(), "data": data}, f)
+    except Exception:
+        pass
+
 
 # ANSI color codes (empty string fallback keeps output clean when piped)
 _C_GREEN  = "\033[32m"
@@ -1287,7 +1319,14 @@ def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=F
                     auth_index = f.get("auth_index", "")
                     if not name or not auth_index:
                         return
-                    out[name] = _fn(_pvd, _sec, auth_index)
+                    cached = _quota_cache_load(_pvd, auth_index)
+                    if cached is not None:
+                        out[name] = cached
+                        return
+                    data = _fn(_pvd, _sec, auth_index)
+                    if data is not None:
+                        _quota_cache_save(_pvd, auth_index, data)
+                    out[name] = data
 
                 threads += [threading.Thread(target=_fetch_quota_one, args=(f, qpa))
                             for f in files]
