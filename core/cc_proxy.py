@@ -2597,17 +2597,18 @@ def main():
         return _tui_main_loop(base_dir, provider)
 
     elif cmd in ("status", "check"):
-        # Parse flags and optional provider from remaining args
+        # Parse flags and optional provider list from remaining args
         rest = args[1:]
         show_quota = "--quota" in rest
         show_check = (cmd == "check") or ("--check" in rest)
         show_short = "--short" in rest or "-s" in rest
         positional = [a for a in rest if not a.startswith("--") and a != "-s"]
-        provider = positional[0] if positional else None
-        if provider and provider not in PROVIDERS:
-            print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
+        invalid = [p for p in positional if p not in PROVIDERS]
+        if invalid:
+            print("[cc-proxy] Invalid provider: {}".format(", ".join(invalid)), file=sys.stderr)
             return 1
-        targets = [provider] if provider else list(PROVIDERS)
+        # preserve user order while deduplicating
+        targets = list(dict.fromkeys(positional)) if positional else list(PROVIDERS)
 
         import threading
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

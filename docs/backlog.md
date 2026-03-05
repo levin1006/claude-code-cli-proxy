@@ -71,5 +71,5 @@
   - `cc-proxy-short` alias 추가 (bash/powershell)
   - `watch -n 1 cc-proxy-short` 으로 빠른 전체 모니터링 가능
 
-- [ ] provider 선택 출력: 현재 전체 provider를 출력하거나 단일 출력만 가능한데 두개 이상도 선택한 것만 출력 가능하도록
+- [x] provider 선택 출력: 현재 전체 provider를 출력하거나 단일 출력만 가능한데 두개 이상도 선택한 것만 출력 가능하도록
 - [ ] provider 마다 박스 색깔 다르게 적용
