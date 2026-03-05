@@ -11,6 +11,9 @@ Usage:
   python3 core/cc_proxy.py ui [provider]
   python3 core/cc_proxy.py links [provider]
   python3 core/cc_proxy.py auth <provider>
+  python3 core/cc_proxy.py token-dir [path]
+  python3 core/cc_proxy.py token-list [provider]
+  python3 core/cc_proxy.py token-delete <provider> <token-file-or-path> [--yes]
   python3 core/cc_proxy.py set-secret <secret>
   python3 core/cc_proxy.py usage-clear [provider]
   python3 core/cc_proxy.py install-profile [--hint-only]
@@ -62,6 +65,9 @@ LOGIN_FLAGS = {
     "gemini":      "-login",
 }
 
+TOKEN_DIR_ENV = "CC_PROXY_TOKEN_DIR"
+TOKEN_DIR_META_FILE = ".token-dir"
+
 
 def get_base_dir():
     return Path(__file__).resolve().parent.parent
@@ -97,6 +103,147 @@ def get_binary_path(base_dir):
 
 def get_provider_dir(base_dir, provider):
     return base_dir / "configs" / provider
+
+
+def _token_prefixes_for_provider(provider):
+    if provider == "antigravity":
+        return ["antigravity", "ag"]
+    return [provider]
+
+
+def _token_file_sort_key(path_obj):
+    try:
+        st = path_obj.stat()
+        return (st.st_mtime, path_obj.name)
+    except Exception:
+        return (0, path_obj.name)
+
+
+def _resolve_token_root(base_dir):
+    """Resolve shared token directory.
+
+    Priority:
+    1) CC_PROXY_TOKEN_DIR env var
+    2) <base_dir>/.token-dir file contents
+    3) default <base_dir>/configs/tokens
+    """
+    env_dir = (os.environ.get(TOKEN_DIR_ENV) or "").strip()
+    if env_dir:
+        return Path(env_dir).expanduser().resolve()
+
+    meta_path = base_dir / TOKEN_DIR_META_FILE
+    if meta_path.exists():
+        try:
+            txt = meta_path.read_text(encoding="utf-8").strip()
+            if txt:
+                return Path(txt).expanduser().resolve()
+        except Exception:
+            pass
+
+    return (base_dir / "configs" / "tokens").resolve()
+
+
+def get_token_dir(base_dir, create=False):
+    token_dir = _resolve_token_root(base_dir)
+    if create:
+        token_dir.mkdir(parents=True, exist_ok=True)
+    return token_dir
+
+
+
+def _save_token_dir_metadata(base_dir, token_dir):
+    meta_path = base_dir / TOKEN_DIR_META_FILE
+    payload = str(Path(token_dir).expanduser().resolve()) + "\n"
+    tmp = str(meta_path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(payload)
+    os.replace(tmp, str(meta_path))
+
+
+def get_token_files(base_dir, provider):
+    """Return token file paths for a provider.
+
+    Transitional behavior:
+    - read from shared token dir (new path, preferred)
+    - also read from provider dir (legacy path)
+    - dedupe by absolute path; if a filename already exists in shared dir,
+      skip the same-named legacy copy to avoid duplicate listings
+    """
+    token_files = []
+    seen_paths = set()
+    seen_names = set()
+
+    def _add(path_obj, from_shared=False):
+        try:
+            rp = path_obj.resolve()
+        except Exception:
+            return
+        key = str(rp)
+        if key in seen_paths:
+            return
+        if not (path_obj.exists() and path_obj.is_file() and path_obj.suffix.lower() == ".json"):
+            return
+        if not from_shared and path_obj.name in seen_names:
+            return
+        seen_paths.add(key)
+        if from_shared:
+            seen_names.add(path_obj.name)
+        token_files.append(path_obj)
+
+    prefixes = _token_prefixes_for_provider(provider)
+
+    shared_dir = get_token_dir(base_dir, create=False)
+    for pfx in prefixes:
+        for p in shared_dir.glob("{}-*.json".format(pfx)):
+            _add(p, from_shared=True)
+
+    legacy_dir = get_provider_dir(base_dir, provider)
+    for pfx in prefixes:
+        for p in legacy_dir.glob("{}-*.json".format(pfx)):
+            _add(p, from_shared=False)
+
+    token_files.sort(key=_token_file_sort_key, reverse=True)
+    return token_files
+
+
+def _is_path_under(path_obj, root_obj):
+    try:
+        path_obj.resolve().relative_to(root_obj.resolve())
+        return True
+    except Exception:
+        return False
+
+
+def resolve_account_file_path(base_dir, provider, rel_or_abs_path):
+    """Resolve account file path safely against allowed roots.
+
+    Allowed roots:
+    - provider legacy dir
+    - shared token dir
+    """
+    rel_path = (rel_or_abs_path or "").strip()
+    if not rel_path:
+        return None, "no file path"
+
+    provider_dir = get_provider_dir(base_dir, provider).resolve()
+    shared_dir = get_token_dir(base_dir, create=False).resolve()
+
+    cand = Path(rel_path).expanduser()
+    if cand.is_absolute():
+        target = cand.resolve()
+    else:
+        p1 = (provider_dir / cand).resolve()
+        p2 = (shared_dir / cand).resolve()
+        if p1.exists() and _is_path_under(p1, provider_dir):
+            target = p1
+        elif _is_path_under(p2, shared_dir):
+            target = p2
+        else:
+            target = p1
+
+    if _is_path_under(target, provider_dir) or _is_path_under(target, shared_dir):
+        return target, None
+    return None, "path outside allowed token dirs"
 
 
 def get_pid_file(base_dir, provider):
@@ -650,6 +797,57 @@ def rewrite_port_in_config(config_path, port):
     config_path.write_text(text, encoding="utf-8")
 
 
+def rewrite_auth_dir_in_config(config_path, auth_dir):
+    text = config_path.read_text(encoding="utf-8")
+    auth_dir = str(Path(auth_dir).expanduser().resolve())
+    if re.search(r"^\s*auth-dir\s*:", text, re.MULTILINE):
+        text = re.sub(
+            r"(?m)^(\s*auth-dir\s*:\s*).*$",
+            r'\g<1>"{}"'.format(auth_dir),
+            text,
+        )
+    else:
+        text = "auth-dir: \"{}\"\n".format(auth_dir) + text
+    config_path.write_text(text, encoding="utf-8")
+
+
+def _sync_legacy_tokens_to_shared(base_dir, provider):
+    """Sync legacy provider token files into shared token directory.
+
+    Returns (copied_count, updated_count).
+    """
+    shared_dir = get_token_dir(base_dir, create=True)
+    legacy_dir = get_provider_dir(base_dir, provider)
+    copied = 0
+    updated = 0
+
+    for pfx in _token_prefixes_for_provider(provider):
+        for src in legacy_dir.glob("{}-*.json".format(pfx)):
+            if not src.exists() or not src.is_file():
+                continue
+            dst = shared_dir / src.name
+            try:
+                if src.resolve() == dst.resolve():
+                    continue
+            except Exception:
+                pass
+
+            try:
+                if not dst.exists():
+                    shutil.copy2(str(src), str(dst))
+                    copied += 1
+                else:
+                    src_m = src.stat().st_mtime
+                    dst_m = dst.stat().st_mtime
+                    if src_m > dst_m:
+                        shutil.copy2(str(src), str(dst))
+                        updated += 1
+            except Exception:
+                pass
+
+    return copied, updated
+
+
 def rewrite_secret_in_config(config_path, secret):
     text = config_path.read_text(encoding="utf-8")
     text = re.sub(
@@ -681,10 +879,21 @@ def ensure_tokens(base_dir, provider):
     auth_hint = "  {} -config configs/{}/config.yaml {}".format(
         exe.name, provider, login_flag)
 
+    token_dir = get_token_dir(base_dir, create=True)
+    copied, updated = _sync_legacy_tokens_to_shared(base_dir, provider)
+
+    config_path = get_config_file(base_dir, provider)
+    if config_path.exists():
+        rewrite_auth_dir_in_config(config_path, token_dir)
+
     tokens = get_token_infos(base_dir, provider)
+
+    if copied or updated:
+        print("[cc-proxy] token sync: copied={}, updated={}".format(copied, updated))
 
     if not tokens:
         print("[cc-proxy] WARNING: No token files found for '{}'.".format(provider))
+        print("[cc-proxy] token-dir: {}".format(token_dir))
         print("[cc-proxy] To authenticate, run:")
         print("[cc-proxy] {}".format(auth_hint))
         print("[cc-proxy] Proceeding anyway...")
@@ -693,6 +902,7 @@ def ensure_tokens(base_dir, provider):
     # Print token status table so user can see auth state before claude launches
     any_expired = any("expired" in t["status"] for t in tokens)
     print("[cc-proxy] Tokens for '{}':".format(provider))
+    print("[cc-proxy] token-dir: {}".format(token_dir))
     for t in tokens:
         label = t["email"] or t["file"]
         marker = "  <-- re-auth needed" if "expired" in t["status"] else ""
@@ -724,6 +934,12 @@ def start_proxy(base_dir, provider, quiet=False):
                 print("[cc-proxy] No config.yaml found for {}".format(provider), file=sys.stderr)
             return False
         shutil.copy(root_bootstrap, config_path)
+
+    token_dir = get_token_dir(base_dir, create=True)
+    copied, updated = _sync_legacy_tokens_to_shared(base_dir, provider)
+    rewrite_auth_dir_in_config(config_path, token_dir)
+    if (copied or updated) and (not quiet):
+        print("[cc-proxy] token sync: copied={}, updated={}".format(copied, updated))
 
     existing_pid = resolve_pid_by_port(PORTS[provider])
     if existing_pid:
@@ -840,17 +1056,20 @@ def _parse_token_expiry(expiry_str):
 
 def get_token_infos(base_dir, provider):
     """Return list of dicts with token file info for a provider."""
-    import glob as _glob, json as _json
     from datetime import datetime, timezone
-    token_dir = get_provider_dir(base_dir, provider)
-    files = sorted(_glob.glob(str(token_dir / "{}-*.json".format(provider))))
     results = []
     now = datetime.now(timezone.utc)
-    for fpath in files:
-        info = {"file": Path(fpath).name, "email": None, "status": "unknown", "expiry": None}
+    for token_path in get_token_files(base_dir, provider):
+        info = {
+            "file": token_path.name,
+            "path": str(token_path),
+            "email": None,
+            "status": "unknown",
+            "expiry": None,
+        }
         try:
-            with open(fpath) as f:
-                data = _json.load(f)
+            with open(token_path, encoding="utf-8") as f:
+                data = json.load(f)
             info["email"] = data.get("email")
             if data.get("disabled"):
                 info["status"] = "disabled"
@@ -1642,7 +1861,8 @@ def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=F
     if result["status"]["running"] and result["status"]["healthy"]:
         try:
             secret = _read_secret_key(base_dir, provider)
-            result["auth_data"] = _management_api(provider, "auth-files", secret)
+            result["auth_data"] = _dedupe_auth_files(
+                _management_api(provider, "auth-files", secret), provider=provider)
             result["usage_data"] = _management_api(provider, "usage", secret)
             if isinstance(result["usage_data"], dict):
                 _usage_cumulative_update_from_live(provider, result["usage_data"])
@@ -2197,8 +2417,9 @@ def _account_identity(f):
     return "fallback:{}:{}".format(path, email)
 
 
-def _dedupe_auth_files(auth_data):
+def _dedupe_auth_files(auth_data, provider=None):
     """Deduplicate auth-files entries caused by mixed relative/absolute path reporting.
+    If provider is given, also filter files to only those matching the provider's prefixes.
 
     Keep the newest record per auth_index (fallback: path/name/email tuple).
     """
@@ -2208,6 +2429,19 @@ def _dedupe_auth_files(auth_data):
     files = auth_data.get("files") or []
     if not files:
         return auth_data
+
+    # prefix filter: only keep files belonging to this provider
+    if provider:
+        prefixes = tuple(
+            "{}-".format(pfx) for pfx in _token_prefixes_for_provider(provider)
+        )
+        def _fname(f):
+            name = (f.get("name") or "").strip()
+            if name:
+                return name.split("/")[-1].split("\\")[-1]
+            path = (f.get("path") or "").strip()
+            return path.replace("\\", "/").split("/")[-1]
+        files = [f for f in files if _fname(f).startswith(prefixes)]
 
     def _ts(f):
         return (
@@ -2271,7 +2505,7 @@ def _tui_fetch_provider(base_dir, provider):
         fetch_quota=True,
         fetch_check=True,
     )
-    d["auth_data"] = _dedupe_auth_files(d.get("auth_data"))
+    d["auth_data"] = _dedupe_auth_files(d.get("auth_data"), provider=provider)
     return d
 
 
@@ -2283,7 +2517,7 @@ def _tui_fetch_provider_light(base_dir, provider):
         fetch_quota=False,
         fetch_check=False,
     )
-    d["auth_data"] = _dedupe_auth_files(d.get("auth_data"))
+    d["auth_data"] = _dedupe_auth_files(d.get("auth_data"), provider=provider)
     return d
 
 
@@ -2314,18 +2548,11 @@ def _tui_toggle_account(base_dir, provider, account, progress_cb=None):
     if not rel_path:
         return False, "toggle unsupported: no file path"
 
-    provider_dir = get_provider_dir(base_dir, provider).resolve()
-    cand = Path(rel_path)
-    if cand.is_absolute():
-        file_path = cand.resolve()
-    else:
-        file_path = (provider_dir / cand).resolve()
-
-    # path escape guard
-    try:
-        file_path.relative_to(provider_dir)
-    except ValueError:
-        return False, "toggle blocked: path outside provider dir"
+    file_path, err = resolve_account_file_path(base_dir, provider, rel_path)
+    if err:
+        return False, "toggle blocked: {}".format(err)
+    if file_path is None:
+        return False, "toggle unsupported: file path resolve failed"
 
     if not file_path.exists() or not file_path.is_file():
         return False, "toggle unsupported: file not found"
@@ -2698,6 +2925,9 @@ def run_auth(base_dir, provider):
         if root_bootstrap.exists():
             shutil.copy(root_bootstrap, config_path)
 
+    token_dir = get_token_dir(base_dir, create=True)
+    rewrite_auth_dir_in_config(config_path, token_dir)
+
     extra_flags = []
     if not should_open_auth_browser():
         extra_flags.append("-no-browser")
@@ -2707,10 +2937,13 @@ def run_auth(base_dir, provider):
 
     login_flag = LOGIN_FLAGS[provider]
     print("[cc-proxy] Starting auth for provider '{}' (callback port {})...".format(provider, free_port))
-    print("[cc-proxy] Token file will be saved to: {}".format(wd))
+    print("[cc-proxy] Token file will be saved to: {}".format(token_dir))
 
     cmd = [str(exe), "-config", str(config_path), login_flag] + extra_flags
-    result = subprocess.run(cmd, cwd=str(wd))
+    env = os.environ.copy()
+    env["CLIPROXY_AUTH_DIR"] = str(token_dir)
+    env["AUTH_DIR"] = str(token_dir)
+    result = subprocess.run(cmd, cwd=str(wd), env=env)
     return result.returncode == 0
 
 
@@ -2858,6 +3091,113 @@ def cmd_set_secret(base_dir, secret):
         print("[cc-proxy] No running providers found. Run cc-<provider> when needed.")
     else:
         print("[cc-proxy] Restarted {} running provider(s).".format(restarted))
+
+
+def cmd_token_dir(base_dir, token_dir=None):
+    if token_dir:
+        resolved = Path(token_dir).expanduser().resolve()
+        resolved.mkdir(parents=True, exist_ok=True)
+        _save_token_dir_metadata(base_dir, resolved)
+        print("[cc-proxy] token-dir set: {}".format(resolved))
+        print("[cc-proxy] Hint: export {}='{}' to override per session.".format(TOKEN_DIR_ENV, resolved))
+        return 0
+
+    current = get_token_dir(base_dir, create=False)
+    print("[cc-proxy] token-dir: {}".format(current))
+    env_dir = (os.environ.get(TOKEN_DIR_ENV) or "").strip()
+    if env_dir:
+        print("[cc-proxy] source: env ({})".format(TOKEN_DIR_ENV))
+    elif (base_dir / TOKEN_DIR_META_FILE).exists():
+        print("[cc-proxy] source: {}".format(TOKEN_DIR_META_FILE))
+    else:
+        print("[cc-proxy] source: default (configs/tokens)")
+    return 0
+
+
+def cmd_token_list(base_dir, provider=None):
+    targets = [provider] if provider else list(PROVIDERS)
+    for pvd in targets:
+        infos = get_token_infos(base_dir, pvd)
+        print("[cc-proxy] token-list {} ({}):".format(pvd, len(infos)))
+        if not infos:
+            print("[cc-proxy]   (none)")
+            continue
+        for i, t in enumerate(infos, start=1):
+            label = t.get("email") or t.get("file") or "?"
+            print("[cc-proxy]   {:>2}. {:<36}  {:<18} {}".format(
+                i, label[:36], t.get("status", "unknown"), t.get("path", "")
+            ))
+    return 0
+
+
+def cmd_token_delete(base_dir, provider, token_name_or_path, yes=False):
+    provider = (provider or "").strip()
+    target = (token_name_or_path or "").strip()
+
+    if provider not in PROVIDERS:
+        print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
+        return 1
+    if not target:
+        print("[cc-proxy] Usage: token-delete <provider> <token-file-or-path> [--yes]", file=sys.stderr)
+        return 1
+
+    infos = get_token_infos(base_dir, provider)
+    if not infos:
+        print("[cc-proxy] No token files for provider '{}'".format(provider), file=sys.stderr)
+        return 1
+
+    matched = None
+    for t in infos:
+        p = t.get("path") or ""
+        name = Path(p).name if p else (t.get("file") or "")
+        stem = Path(name).stem if name else ""
+        email = (t.get("email") or "").strip()
+        if target in (name, stem, p, email):
+            matched = t
+            break
+
+    if matched is None:
+        # absolute/relative path fallback resolve (still guarded)
+        resolved, err = resolve_account_file_path(base_dir, provider, target)
+        if err:
+            print("[cc-proxy] token-delete blocked: {}".format(err), file=sys.stderr)
+            return 1
+        if resolved is None:
+            print("[cc-proxy] token-delete failed: cannot resolve target", file=sys.stderr)
+            return 1
+        for t in infos:
+            if (t.get("path") or "") == str(resolved):
+                matched = t
+                break
+
+    if matched is None:
+        print("[cc-proxy] token-delete failed: token not found for provider '{}'".format(provider), file=sys.stderr)
+        return 1
+
+    token_path = Path(matched.get("path") or "")
+    if not token_path.exists() or not token_path.is_file():
+        print("[cc-proxy] token-delete failed: file not found", file=sys.stderr)
+        return 1
+
+    # provider prefix guard
+    stem = token_path.name
+    prefixes = tuple("{}-".format(pfx) for pfx in _token_prefixes_for_provider(provider))
+    if not stem.startswith(prefixes):
+        print("[cc-proxy] token-delete blocked: filename prefix mismatch ({})".format(stem), file=sys.stderr)
+        return 1
+
+    if not yes:
+        print("[cc-proxy] Refusing to delete without --yes")
+        print("[cc-proxy] target: {}".format(token_path))
+        return 1
+
+    try:
+        token_path.unlink()
+        print("[cc-proxy] token deleted: {}".format(token_path))
+        return 0
+    except Exception as e:
+        print("[cc-proxy] token-delete failed: {}".format(e), file=sys.stderr)
+        return 1
 
 
 def print_usage():
@@ -3060,6 +3400,29 @@ def main():
             print("[cc-proxy] Failed to restart {} after auth.".format(provider), file=sys.stderr)
             return 1
         return 0
+
+    elif cmd == "token-dir":
+        token_dir = args[1] if len(args) > 1 else None
+        return cmd_token_dir(base_dir, token_dir)
+
+    elif cmd == "token-list":
+        if len(args) > 2:
+            print("[cc-proxy] Usage: token-list [provider]", file=sys.stderr)
+            return 1
+        provider = args[1] if len(args) > 1 else None
+        if provider and provider not in PROVIDERS:
+            print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
+            return 1
+        return cmd_token_list(base_dir, provider)
+
+    elif cmd == "token-delete":
+        if len(args) < 3:
+            print("[cc-proxy] Usage: token-delete <provider> <token-file-or-path> [--yes]", file=sys.stderr)
+            return 1
+        provider = args[1]
+        target = args[2]
+        yes = "--yes" in args[3:]
+        return cmd_token_delete(base_dir, provider, target, yes=yes)
 
     elif cmd == "set-secret":
         if len(args) < 2:
