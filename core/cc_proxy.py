@@ -7,7 +7,7 @@ Usage:
   python3 core/cc_proxy.py run <preset> [-- claude-args...]
   python3 core/cc_proxy.py start <provider> | all
   python3 core/cc_proxy.py stop [provider]
-  python3 core/cc_proxy.py status [provider]
+  python3 core/cc_proxy.py status [provider ...]
   python3 core/cc_proxy.py ui [provider]
   python3 core/cc_proxy.py links [provider]
   python3 core/cc_proxy.py auth <provider>
@@ -1732,7 +1732,7 @@ def _tui_leave_screen():
 def _tui_key_to_action(key):
     if not key:
         return None
-    if key in (_TUI_KEY_LEFT, _TUI_KEY_RIGHT, _TUI_KEY_UP, _TUI_KEY_DOWN, _TUI_KEY_ESC):
+    if key in (_TUI_KEY_ESC,):
         return key
     if key == "\x1b":
         return _TUI_KEY_ESC
@@ -2095,7 +2095,7 @@ def _tui_render(base_dir, state):
         tabs.append(label)
     tab_line = "  " + "   ".join(tabs)
 
-    footer_keys = "  ← →/a d provider   ↑ ↓/w s account   space toggle   r refresh   q quit"
+    footer_keys = "  a d provider   w s account   space toggle   r refresh   q quit"
     if state.get("message"):
         msg = "  " + state["message"]
     else:

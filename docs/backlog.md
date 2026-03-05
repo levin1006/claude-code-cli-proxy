@@ -39,7 +39,7 @@
   - status의 quota + account validation + available model을 한 화면에서 확인 가능
 
 - [x] cli ui를 통해 방향키로 이동하여 계정 on/off 시키는 기능
-  - 키맵: ←/→ provider, ↑/↓ account, space toggle, r refresh, 1-4 jump, q quit
+  - 키맵: a/d provider, w/s account, space toggle, r refresh, 1-4 jump, q quit
   - 토글 안정화: 선택된 account의 path JSON 직접 수정 + atomic write(tmp→replace)
   - 토글 반영: provider 재시작으로 확정 반영 (quiet 모드)
   - UI 안정화: 토글 진행 로그를 박스 하단 메시지바로 통합 (외부 로그 출력 억제)
