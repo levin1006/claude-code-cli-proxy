@@ -45,9 +45,8 @@
   - UI 안정화: 토글 진행 로그를 박스 하단 메시지바로 통합 (외부 로그 출력 억제)
   - 렌더링 안정화: ANSI/CJK 폭 기준 박스 정렬 보정으로 메시지 변경 시 깨짐 방지
 
-- [ ] cc-proxy-stop 시 usage 데이터 손실 문제
-  - CLIProxyAPI 바이너리 수준 이슈, hot-reload 불가
-  - 가능한 우회: stop 전 usage 스냅샷 저장?
+- [x] cc-proxy-stop 시 usage 데이터 손실 문제
+  - stop 직전 usage snapshot 저장 + stopped 상태 fallback 표시로 단절 완화
 
 - [x] accounts와 accounts validation 탭이 거의 중복되므로 account validation 정보를 accounts로 옮기기 (accounts validation 정보가 이모지도 있고 모델 개수도 있고 더 풍부함)
 
@@ -72,4 +71,4 @@
   - `watch -n 1 cc-proxy-short` 으로 빠른 전체 모니터링 가능
 
 - [x] provider 선택 출력: 현재 전체 provider를 출력하거나 단일 출력만 가능한데 두개 이상도 선택한 것만 출력 가능하도록
-- [ ] provider 마다 박스 색깔 다르게 적용
+- [x] provider 마다 박스 색깔 다르게 적용

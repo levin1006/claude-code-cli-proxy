@@ -12,6 +12,7 @@ Usage:
   python3 core/cc_proxy.py links [provider]
   python3 core/cc_proxy.py auth <provider>
   python3 core/cc_proxy.py set-secret <secret>
+  python3 core/cc_proxy.py usage-clear [provider]
   python3 core/cc_proxy.py install-profile [--hint-only]
   python3 core/cc_proxy.py clean [-- claude-args...]
 """
@@ -781,6 +782,7 @@ def start_proxy(base_dir, provider, quiet=False):
 
 def stop_proxy(base_dir, provider, quiet=False):
     if provider:
+        _capture_usage_snapshot_before_stop(base_dir, provider, quiet=quiet)
         pid = read_pid(base_dir, provider)
         if pid and is_pid_alive(pid):
             kill_pid(pid)
@@ -794,6 +796,7 @@ def stop_proxy(base_dir, provider, quiet=False):
             print("[cc-proxy] Stopped {}.".format(provider))
     else:
         for pvd in PROVIDERS:
+            _capture_usage_snapshot_before_stop(base_dir, pvd, quiet=True)
             pid = read_pid(base_dir, pvd)
             if pid and is_pid_alive(pid):
                 kill_pid(pid)
@@ -1180,6 +1183,8 @@ _QUOTA_FETCHERS = {
 }
 
 QUOTA_CACHE_TTL = 60  # seconds
+USAGE_SNAPSHOT_SCHEMA_VERSION = 1
+USAGE_CUMULATIVE_SCHEMA_VERSION = 1
 
 
 def _quota_cache_path(provider, auth_index):
@@ -1212,12 +1217,255 @@ def _quota_cache_save(provider, auth_index, data):
         pass
 
 
+def _usage_snapshot_path(provider):
+    """Return /tmp usage snapshot file path for a provider."""
+    return os.path.join(tempfile.gettempdir(), "cc-proxy-usage-snapshot-{}.json".format(provider))
+
+
+def _usage_snapshot_save(provider, usage_data, reason="stop"):
+    """Persist usage snapshot atomically. Returns True on success."""
+    if not isinstance(usage_data, dict):
+        return False
+
+    captured_at = time.time()
+    iso = datetime.fromtimestamp(captured_at, tz=timezone.utc).isoformat()
+    payload = {
+        "schema_version": USAGE_SNAPSHOT_SCHEMA_VERSION,
+        "provider": provider,
+        "captured_at": captured_at,
+        "captured_at_iso": iso,
+        "reason": reason,
+        "usage_data": usage_data,
+    }
+
+    path = _usage_snapshot_path(provider)
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
+        return False
+
+
+def _usage_snapshot_load(provider):
+    """Load usage snapshot; return dict with usage_data + metadata, or None."""
+    path = _usage_snapshot_path(provider)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+    if data.get("schema_version") != USAGE_SNAPSHOT_SCHEMA_VERSION:
+        return None
+    if data.get("provider") != provider:
+        return None
+    usage_data = data.get("usage_data")
+    if not isinstance(usage_data, dict):
+        return None
+
+    return {
+        "usage_data": usage_data,
+        "captured_at": data.get("captured_at"),
+        "captured_at_iso": data.get("captured_at_iso"),
+        "reason": data.get("reason", ""),
+    }
+
+
+def _capture_usage_snapshot_before_stop(base_dir, provider, quiet=False):
+    """Capture /usage snapshot before stopping running provider; never raises."""
+    try:
+        status = get_status(base_dir, provider)
+        if not status.get("running"):
+            return False
+        secret = _read_secret_key(base_dir, provider)
+        usage_data = _management_api(provider, "usage", secret)
+        if not isinstance(usage_data, dict):
+            return False
+        ok = _usage_snapshot_save(provider, usage_data, reason="stop")
+        if (not quiet) and ok:
+            print("[cc-proxy] Saved usage snapshot: {}".format(provider))
+        return ok
+    except Exception:
+        return False
+
+
+def _usage_cumulative_path(provider):
+    """Return /tmp cumulative usage file path for a provider."""
+    return os.path.join(tempfile.gettempdir(), "cc-proxy-usage-cumulative-{}.json".format(provider))
+
+
+def _usage_totals_extract(usage_data):
+    """Extract top-level usage totals from usage_data dict."""
+    if not isinstance(usage_data, dict):
+        return None
+    u = usage_data.get("usage")
+    if not isinstance(u, dict):
+        return None
+    return {
+        "total_requests": int(u.get("total_requests", 0) or 0),
+        "success_count": int(u.get("success_count", 0) or 0),
+        "failure_count": int(u.get("failure_count", 0) or 0),
+        "total_tokens": int(u.get("total_tokens", 0) or 0),
+    }
+
+
+def _usage_cumulative_load(provider):
+    """Load cumulative usage totals for a provider; return dict or None."""
+    path = _usage_cumulative_path(provider)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+    if data.get("schema_version") != USAGE_CUMULATIVE_SCHEMA_VERSION:
+        return None
+    if data.get("provider") != provider:
+        return None
+
+    totals = data.get("totals")
+    if not isinstance(totals, dict):
+        return None
+    if not all(k in totals for k in ("total_requests", "success_count", "failure_count", "total_tokens")):
+        return None
+
+    return data
+
+
+def _usage_cumulative_save(provider, payload):
+    """Persist cumulative payload atomically."""
+    path = _usage_cumulative_path(provider)
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
+        return False
+
+
+def _usage_cumulative_clear(provider):
+    """Delete cumulative usage file for provider."""
+    path = _usage_cumulative_path(provider)
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except Exception:
+        pass
+
+
+def _usage_cumulative_update_from_live(provider, usage_data):
+    """Update cumulative totals by adding positive delta from current live totals."""
+    current = _usage_totals_extract(usage_data)
+    if current is None:
+        return False
+
+    prev = _usage_cumulative_load(provider)
+    prev_live = prev.get("last_live_totals") if prev else None
+    prev_total = prev.get("totals") if prev else None
+
+    if not isinstance(prev_live, dict):
+        prev_live = {k: 0 for k in current.keys()}
+    if not isinstance(prev_total, dict):
+        prev_total = {k: 0 for k in current.keys()}
+
+    delta = {}
+    for k, v in current.items():
+        p = int(prev_live.get(k, 0) or 0)
+        delta[k] = v - p if v >= p else v
+
+    new_total = {}
+    for k in current.keys():
+        new_total[k] = int(prev_total.get(k, 0) or 0) + int(delta.get(k, 0) or 0)
+
+    now_ts = time.time()
+    payload = {
+        "schema_version": USAGE_CUMULATIVE_SCHEMA_VERSION,
+        "provider": provider,
+        "updated_at": now_ts,
+        "updated_at_iso": datetime.fromtimestamp(now_ts, tz=timezone.utc).isoformat(),
+        "totals": new_total,
+        "last_live_totals": current,
+    }
+    return _usage_cumulative_save(provider, payload)
+
+
+def _usage_cumulative_apply_to_usage_data(provider, usage_data):
+    """Overlay cumulative totals into usage_data for display continuity."""
+    if not isinstance(usage_data, dict):
+        return usage_data
+    u = usage_data.get("usage")
+    if not isinstance(u, dict):
+        return usage_data
+
+    cum = _usage_cumulative_load(provider)
+    if not cum:
+        return usage_data
+
+    totals = cum.get("totals") or {}
+    for k in ("total_requests", "success_count", "failure_count", "total_tokens"):
+        if k in totals:
+            u[k] = int(totals.get(k, 0) or 0)
+    return usage_data
+
+
 # ANSI color codes (empty string fallback keeps output clean when piped)
 _C_GREEN  = "\033[32m"
 _C_RED    = "\033[31m"
+_C_BLUE   = "\033[34m"
+_C_MAGENTA = "\033[35m"
+_C_CYAN   = "\033[36m"
+_C_YELLOW = "\033[33m"
 _C_DIM    = "\033[2m"
 _C_BOLD   = "\033[1m"
 _C_RESET  = "\033[0m"
+
+_PROVIDER_BRAND_COLORS = {
+    # Brand-first pastel palette with TrueColor + xterm-256 fallback
+    # (truecolor_rgb, fallback_256)
+    "antigravity": ((152, 190, 220), "\033[38;5;110m"),  # pastel cyan-blue
+    "claude": ((233, 168, 142), "\033[38;5;216m"),       # pastel orange
+    "codex": ((137, 197, 175), "\033[38;5;114m"),        # pastel mint
+    "gemini": ((176, 157, 236), "\033[38;5;147m"),       # pastel violet
+}
+
+
+def _supports_truecolor():
+    ct = (os.environ.get("COLORTERM") or "").lower()
+    if "truecolor" in ct or "24bit" in ct:
+        return True
+    term = (os.environ.get("TERM") or "").lower()
+    if "direct" in term:
+        return True
+    return False
+
+
+def _provider_frame_color(provider):
+    rgb, fallback = _PROVIDER_BRAND_COLORS.get(provider, ((0, 0, 0), ""))
+    if not fallback:
+        return ""
+    if _supports_truecolor():
+        r, g, b = rgb
+        return "\033[38;2;{};{};{}m".format(r, g, b)
+    return fallback
 
 # TUI screen/key constants
 _TUI_ALT_ON = "\033[?1049h"
@@ -1237,6 +1485,9 @@ _TUI_KEY_ESC = "esc"
 _TUI_STDIN_BUF = ""
 # Windows key event buffer (preserve order: navigation then toggle)
 _TUI_WIN_BUF = []
+
+# Optional default edge color for box vertical borders
+_BOX_EDGE_COLOR = ""
 
 
 def _strip_ansi(s):
@@ -1281,11 +1532,20 @@ def _clip_visible(s, max_visible):
     return "".join(out)
 
 
-def _box_line(text, width):
-    """║  text    ║ 형태로 패딩. ANSI + CJK 폭까지 고려해 정렬."""
+def _box_line(text, width, edge_color=""):
+    """║  text    ║ 형태로 패딩. ANSI + CJK 폭까지 고려해 정렬.
+
+    edge_color가 주어지면 좌우 세로 테두리(║)에만 색을 적용한다.
+    기본값은 _BOX_EDGE_COLOR.
+    """
+    edge_color = edge_color or _BOX_EDGE_COLOR
     max_visible = width - 4
     inner = _clip_visible(text, max_visible)
     pad = max_visible - _visible_len(inner)
+    if edge_color:
+        return "{}\u2551{} {}{} {}\u2551{}".format(
+            edge_color, _C_RESET, inner, " " * max(0, pad), edge_color, _C_RESET
+        )
     return "\u2551 {}{} \u2551".format(inner, " " * max(0, pad))
 
 
@@ -1375,6 +1635,8 @@ def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=F
         "auth_error": False, "models_per_account": {},
         "quota_data": {},   # {account_name: quota_dict or None}
         "proxy_models": None,
+        "usage_source": "none",            # live | snapshot | none
+        "usage_snapshot_at": None,          # ISO string when source=snapshot
     }
     result["status"] = get_status(base_dir, provider)
     if result["status"]["running"] and result["status"]["healthy"]:
@@ -1382,6 +1644,10 @@ def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=F
             secret = _read_secret_key(base_dir, provider)
             result["auth_data"] = _management_api(provider, "auth-files", secret)
             result["usage_data"] = _management_api(provider, "usage", secret)
+            if isinstance(result["usage_data"], dict):
+                _usage_cumulative_update_from_live(provider, result["usage_data"])
+                result["usage_data"] = _usage_cumulative_apply_to_usage_data(provider, result["usage_data"])
+                result["usage_source"] = "live"
         except urllib.error.HTTPError as e:
             if e.code == 401:
                 result["auth_error"] = True
@@ -1449,6 +1715,13 @@ def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=F
             for t in threads:
                 t.join(timeout=10)
 
+    if result["usage_source"] == "none":
+        snap = _usage_snapshot_load(provider)
+        if snap:
+            result["usage_data"] = _usage_cumulative_apply_to_usage_data(provider, snap.get("usage_data"))
+            result["usage_source"] = "snapshot"
+            result["usage_snapshot_at"] = snap.get("captured_at_iso")
+
     return result
 
 
@@ -1457,7 +1730,11 @@ def _print_status_dashboard(base_dir, provider, status, W,
                             models_per_account=None, quota_data=None,
                             proxy_models=None, show_check=False,
                             selected_account_name=None,
-                            selected_account_key=None):
+                            selected_account_key=None,
+                            frame_color="",
+                            usage_source="none",
+                            usage_snapshot_at=None):
+    global _BOX_EDGE_COLOR
     """Print rich dashboard panel for a provider.
 
     quota_data:    {account_name: quota_dict} — show Quota section when present
@@ -1477,64 +1754,81 @@ def _print_status_dashboard(base_dir, provider, status, W,
     files = auth_data.get("files", []) if auth_data else []
     acct_suffix = "  {} accounts".format(len(files)) if files else ""
     header = "  {}  :{}   {} {}{}".format(provider, port, dot_str, state_str, acct_suffix)
-    print(_box_sep(W))
-    print(_box_line(header, W))
+    prev_edge_color = _BOX_EDGE_COLOR
+    if frame_color:
+        _BOX_EDGE_COLOR = frame_color
+        print(frame_color + _box_sep(W) + _C_RESET)
+        print(_box_line(header, W))
+    else:
+        _BOX_EDGE_COLOR = ""
+        print(_box_sep(W))
+        print(_box_line(header, W))
 
     if auth_error:
         hint = _C_RED + "  auth failed" + _C_RESET + " \u2014 set CC_PROXY_SECRET env var"
         print(_box_line(hint, W))
+        _BOX_EDGE_COLOR = prev_edge_color
         return
 
     # No data to display: compact view
     u = usage_data.get("usage", {}) if usage_data else {}
-    has_data = bool(files or u.get("total_requests", 0))
-    if not running or not healthy or not has_data:
+    has_accounts = bool(files)
+    has_usage = bool(usage_data and isinstance(u, dict))
+    if not has_accounts and not has_usage:
+        _BOX_EDGE_COLOR = prev_edge_color
         return
 
-    # --- accounts section ---
-    print(_box_line("", W))
-    print(_box_line("  Accounts", W))
     divider = "  " + "\u2500" * (W - 6)
-    print(_box_line(divider, W))
+
     all_ok = True
-    for f in files:
-        email = f.get("email", f.get("name", "?"))
-        name  = f.get("name", "")
-        last_refresh = f.get("last_refresh", "")
-        plan_type = (f.get("id_token") or {}).get("plan_type", "")
-        time_str = _time_ago(last_refresh) if last_refresh else ""
-        model_list = models_per_account.get(name) if models_per_account else None
-        mc_str = "       \u2014" if model_list is None else (
-            "{:>2} models".format(len(model_list)) if len(model_list) > 0 else " 0 models"
-        )
-        indicator, acct_status, is_degraded = _acct_status_label(f)
+    if has_accounts:
+        # --- accounts section ---
+        print(_box_line("", W))
+        print(_box_line("  Accounts", W))
+        print(_box_line(divider, W))
+        for f in files:
+            email = f.get("email", f.get("name", "?"))
+            name = f.get("name", "")
+            last_refresh = f.get("last_refresh", "")
+            plan_type = (f.get("id_token") or {}).get("plan_type", "")
+            time_str = _time_ago(last_refresh) if last_refresh else ""
+            model_list = models_per_account.get(name) if models_per_account else None
+            mc_str = "       \u2014" if model_list is None else (
+                "{:>2} models".format(len(model_list)) if len(model_list) > 0 else " 0 models"
+            )
+            indicator, acct_status, is_degraded = _acct_status_label(f)
 
-        # Override: proxy-active but 0 models → not in routing pool
-        if (not f.get("disabled", False)
-                and f.get("status", "") not in ("error",)
-                and not f.get("unavailable", False)
-                and model_list is not None
-                and len(model_list) == 0):
-            indicator = _C_DIM + "\u26a0" + _C_RESET
-            acct_status = _C_DIM + "no models" + _C_RESET
-            is_degraded = True
+            # Override: proxy-active but 0 models → not in routing pool
+            if (not f.get("disabled", False)
+                    and f.get("status", "") not in ("error",)
+                    and not f.get("unavailable", False)
+                    and model_list is not None
+                    and len(model_list) == 0):
+                indicator = _C_DIM + "\u26a0" + _C_RESET
+                acct_status = _C_DIM + "no models" + _C_RESET
+                is_degraded = True
 
-        if is_degraded:
-            all_ok = False
+            if is_degraded:
+                all_ok = False
 
-        label = email
-        if plan_type:
-            suffix = " [{}]".format(plan_type)
-            label = email[:max(0, 26 - len(suffix))] + suffix
-        if selected_account_key:
-            is_selected = (_account_identity(f) == selected_account_key)
-        else:
-            is_selected = bool(selected_account_name and name == selected_account_name)
-        cursor = "▸" if is_selected else " "
-        row = "{} {:<26}  {:>9}  {:>8}  {} {}".format(
-            cursor, label[:26], mc_str, time_str, indicator, acct_status
-        )
-        print(_box_line(row, W))
+            label = email
+            if plan_type:
+                suffix = " [{}]".format(plan_type)
+                label = email[:max(0, 26 - len(suffix))] + suffix
+            if selected_account_key:
+                is_selected = (_account_identity(f) == selected_account_key)
+            else:
+                is_selected = bool(selected_account_name and name == selected_account_name)
+            cursor = "▸" if is_selected else " "
+            row = "{} {:<26}  {:>9}  {:>8}  {} {}".format(
+                cursor, label[:26], mc_str, time_str, indicator, acct_status
+            )
+            print(_box_line(row, W))
+
+    if not has_usage:
+        print(_box_line("", W))
+        _BOX_EDGE_COLOR = prev_edge_color
+        return
 
     # --- usage section ---
     total_req = u.get("total_requests", 0)
@@ -1543,7 +1837,14 @@ def _print_status_dashboard(base_dir, provider, status, W,
     total_tok = u.get("total_tokens", 0)
 
     print(_box_line("", W))
-    print(_box_line("  Usage", W))
+    if usage_source == "live":
+        usage_title = "  Usage (live)"
+    elif usage_source == "snapshot":
+        age = _time_ago(usage_snapshot_at) if usage_snapshot_at else ""
+        usage_title = "  Usage (snapshot, {})".format(age) if age else "  Usage (snapshot)"
+    else:
+        usage_title = "  Usage"
+    print(_box_line(usage_title, W))
     print(_box_line(divider, W))
 
     fail_str = (
@@ -1636,7 +1937,7 @@ def _print_status_dashboard(base_dir, provider, status, W,
             print(_box_line(row, W))
 
     # --- quota section (shown when --quota flag used) ---
-    if quota_data:
+    if quota_data and files:
         QUOTA_MODELS = {
             "antigravity": {"gemini-3.1-pro-high", "gemini-3.1-pro-low",
                             "gemini-3-flash", "claude-sonnet-4-6",
@@ -1687,7 +1988,7 @@ def _print_status_dashboard(base_dir, provider, status, W,
                 print(_box_line(row, W))
 
     # --- check section (shown when --check flag used) ---
-    if show_check:
+    if show_check and files:
         cdiv = "  " + "\u2500" * (W - 6)
         print(_box_line("", W))
         if not files:
@@ -1707,7 +2008,7 @@ def _print_status_dashboard(base_dir, provider, status, W,
                     print(_box_line("    {}".format(mid[:60]), W))
 
     print(_box_line("", W))
-
+    _BOX_EDGE_COLOR = prev_edge_color
 
 
 
@@ -2118,12 +2419,21 @@ def _tui_render(base_dir, state):
 
     buf = io.StringIO()
     with redirect_stdout(buf):
-        print(_box_top(W))
+        frame_color = _provider_frame_color(provider)
+        if frame_color:
+            print(frame_color + _box_top(W) + _C_RESET)
+        else:
+            print(_box_top(W))
         title = "  cc-proxy ui"
         padding = W - 4 - len(re.sub(r"\033\[[0-9;]*m", "", title)) - len(now_str)
-        print(_box_line(title + " " * max(1, padding) + now_str, W))
-        print(_box_sep(W))
-        print(_box_line(tab_line, W))
+        if frame_color:
+            print(frame_color + _box_line(title + " " * max(1, padding) + now_str, W) + _C_RESET)
+            print(frame_color + _box_sep(W) + _C_RESET)
+            print(frame_color + _box_line(tab_line, W) + _C_RESET)
+        else:
+            print(_box_line(title + " " * max(1, padding) + now_str, W))
+            print(_box_sep(W))
+            print(_box_line(tab_line, W))
 
         _print_status_dashboard(
             base_dir,
@@ -2133,18 +2443,29 @@ def _tui_render(base_dir, state):
             auth_data=data.get("auth_data"),
             usage_data=data.get("usage_data"),
             auth_error=data.get("auth_error", False),
+            usage_source=data.get("usage_source", "none"),
+            usage_snapshot_at=data.get("usage_snapshot_at"),
             models_per_account=data.get("models_per_account"),
             quota_data=data.get("quota_data"),
             proxy_models=data.get("proxy_models"),
             show_check=True,
             selected_account_name=selected_name,
             selected_account_key=selected_key,
+            frame_color=frame_color,
         )
 
-        print(_box_sep(W))
-        print(_box_line(msg, W))
-        print(_box_line(footer_keys, W))
-        print(_box_bottom(W))
+        if frame_color:
+            print(frame_color + _box_sep(W) + _C_RESET)
+        else:
+            print(_box_sep(W))
+        if frame_color:
+            print(frame_color + _box_line(msg, W) + _C_RESET)
+            print(frame_color + _box_line(footer_keys, W) + _C_RESET)
+            print(frame_color + _box_bottom(W) + _C_RESET)
+        else:
+            print(_box_line(msg, W))
+            print(_box_line(footer_keys, W))
+            print(_box_bottom(W))
 
     rendered = buf.getvalue()
 
@@ -2669,14 +2990,17 @@ def main():
                 u      = (data.get("usage_data") or {}).get("usage", {})
                 t_req  = u.get("total_requests", 0)
                 t_tok  = _fmt_tokens(u.get("total_tokens", 0))
+                usage_src = data.get("usage_source", "none")
                 if s.get("running"):
-                    dot   = _C_GREEN + "\u25cf" + _C_RESET
+                    dot = _C_GREEN + "\u25cf" + _C_RESET
                     state = "running"
+                    snap_tag = ""
                 else:
-                    dot   = _C_DIM + "\u25cb" + _C_RESET
+                    dot = _C_DIM + "\u25cb" + _C_RESET
                     state = "stopped"
-                row = "  {:<13} :{:5d}  {} {:<7}  {:>2} accts  {:>5} req  {:>6} tok".format(
-                    pvd, port, dot, state, n_acct, t_req, t_tok
+                    snap_tag = " [snap]" if usage_src == "snapshot" else ""
+                row = "  {:<13} :{:5d}  {} {:<7}{}  {:>2} accts  {:>5} req  {:>6} tok".format(
+                    pvd, port, dot, state, snap_tag, n_acct, t_req, t_tok
                 )
                 print(_box_line(row, W))
             print(_box_bottom(W))
@@ -2692,10 +3016,13 @@ def main():
                     auth_data=data.get("auth_data"),
                     usage_data=data.get("usage_data"),
                     auth_error=data.get("auth_error", False),
+                    usage_source=data.get("usage_source", "none"),
+                    usage_snapshot_at=data.get("usage_snapshot_at"),
                     models_per_account=data.get("models_per_account"),
                     quota_data=data.get("quota_data") if show_quota else None,
                     proxy_models=data.get("proxy_models"),
                     show_check=show_check,
+                    frame_color=_provider_frame_color(pvd),
                 )
             print(_box_bottom(W))
         return 0
@@ -2739,6 +3066,20 @@ def main():
             print("[cc-proxy] Usage: set-secret <secret>", file=sys.stderr)
             return 1
         cmd_set_secret(base_dir, args[1])
+        return 0
+
+    elif cmd == "usage-clear":
+        provider = args[1] if len(args) > 1 else None
+        if provider:
+            if provider not in PROVIDERS:
+                print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
+                return 1
+            _usage_cumulative_clear(provider)
+            print("[cc-proxy] Cleared cumulative usage: {}".format(provider))
+        else:
+            for pvd in PROVIDERS:
+                _usage_cumulative_clear(pvd)
+            print("[cc-proxy] Cleared cumulative usage: all providers")
         return 0
 
     elif cmd == "install-profile":

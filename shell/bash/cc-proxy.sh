@@ -49,6 +49,7 @@ cc-proxy-links()      { _cc_proxy links      "$@"; }
 cc-proxy-stop()       { _cc_proxy stop       "$@"; }
 cc-proxy-auth()       { _cc_proxy auth       "$@"; }
 cc-proxy-set-secret() { _cc_proxy set-secret "$@"; }
+cc-proxy-usage-clear() { _cc_proxy usage-clear "$@"; }
 cc_proxy_install_profile() { _cc_proxy install-profile; }
 
 # Profile hint on first source
