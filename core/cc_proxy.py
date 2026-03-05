@@ -2227,8 +2227,11 @@ def _print_status_dashboard(base_dir, provider, status, W,
         # Use per-account model union (matches the "N models" count shown per account row).
         # Fall back to proxy_models only if per-account data isn't available.
         if models_per_account:
+            def _mid(m):
+                return m.get("id", "") if isinstance(m, dict) else str(m)
             acct_model_ids = sorted(
-                {mid for mlist in models_per_account.values() if mlist for mid in mlist}
+                {_mid(m) for mlist in models_per_account.values() if mlist for m in mlist
+                 if _mid(m)}
             )
         else:
             acct_model_ids = None
