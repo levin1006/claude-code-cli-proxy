@@ -42,6 +42,17 @@ CORE_FILES = {
     "shell/bash/cc-proxy.sh": "shell/bash/cc-proxy.sh",
     "shell/powershell/cc-proxy.ps1": "shell/powershell/cc-proxy.ps1",
     "core/cc_proxy.py": "core/cc_proxy.py",
+    "core/constants.py": "core/constants.py",
+    "core/paths.py": "core/paths.py",
+    "core/process.py": "core/process.py",
+    "core/config.py": "core/config.py",
+    "core/api.py": "core/api.py",
+    "core/quota.py": "core/quota.py",
+    "core/usage.py": "core/usage.py",
+    "core/proxy.py": "core/proxy.py",
+    "core/display.py": "core/display.py",
+    "core/tui.py": "core/tui.py",
+    "core/commands.py": "core/commands.py",
 }
 
 BINARY_PATHS = {

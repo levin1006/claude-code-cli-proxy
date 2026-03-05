@@ -50,7 +50,11 @@
 
 - [x] accounts와 accounts validation 탭이 거의 중복되므로 account validation 정보를 accounts로 옮기기 (accounts validation 정보가 이모지도 있고 모델 개수도 있고 더 풍부함)
 
-- [ ] cc-proxy.py 코드가 너무 길어짐. 모듈화하여 접근성을 높여야 함
+- [x] cc-proxy.py 코드가 너무 길어짐. 모듈화하여 접근성을 높여야 함
+  - 3,448줄 단일 파일 → 11개 모듈로 분리 (core/ 디렉터리)
+  - constants, paths, process, config, api, quota, usage, proxy, display, tui, commands
+  - cc_proxy.py는 ~250줄 thin dispatcher로 축소
+  - 의존성 DAG 비순환 보장, sibling import (python3 core/cc_proxy.py 실행 방식 유지)
 
 - [x] 토큰 관리 위치 일원화 및 auth files 로드 기능 추가
   - 공용 토큰 디렉터리 도입: `cc-proxy token-dir [path]` (기본 `configs/tokens`, ENV `CC_PROXY_TOKEN_DIR` 우선)
