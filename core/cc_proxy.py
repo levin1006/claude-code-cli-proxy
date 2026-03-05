@@ -161,47 +161,14 @@ def _save_token_dir_metadata(base_dir, token_dir):
 
 
 def get_token_files(base_dir, provider):
-    """Return token file paths for a provider.
-
-    Transitional behavior:
-    - read from shared token dir (new path, preferred)
-    - also read from provider dir (legacy path)
-    - dedupe by absolute path; if a filename already exists in shared dir,
-      skip the same-named legacy copy to avoid duplicate listings
-    """
-    token_files = []
-    seen_paths = set()
-    seen_names = set()
-
-    def _add(path_obj, from_shared=False):
-        try:
-            rp = path_obj.resolve()
-        except Exception:
-            return
-        key = str(rp)
-        if key in seen_paths:
-            return
-        if not (path_obj.exists() and path_obj.is_file() and path_obj.suffix.lower() == ".json"):
-            return
-        if not from_shared and path_obj.name in seen_names:
-            return
-        seen_paths.add(key)
-        if from_shared:
-            seen_names.add(path_obj.name)
-        token_files.append(path_obj)
-
+    """Return token file paths for a provider from the shared token directory."""
+    token_dir = get_token_dir(base_dir, create=False)
     prefixes = _token_prefixes_for_provider(provider)
-
-    shared_dir = get_token_dir(base_dir, create=False)
+    token_files = []
     for pfx in prefixes:
-        for p in shared_dir.glob("{}-*.json".format(pfx)):
-            _add(p, from_shared=True)
-
-    legacy_dir = get_provider_dir(base_dir, provider)
-    for pfx in prefixes:
-        for p in legacy_dir.glob("{}-*.json".format(pfx)):
-            _add(p, from_shared=False)
-
+        for p in token_dir.glob("{}-*.json".format(pfx)):
+            if p.is_file():
+                token_files.append(p)
     token_files.sort(key=_token_file_sort_key, reverse=True)
     return token_files
 
@@ -215,35 +182,22 @@ def _is_path_under(path_obj, root_obj):
 
 
 def resolve_account_file_path(base_dir, provider, rel_or_abs_path):
-    """Resolve account file path safely against allowed roots.
-
-    Allowed roots:
-    - provider legacy dir
-    - shared token dir
-    """
+    """Resolve account file path safely against the shared token directory."""
     rel_path = (rel_or_abs_path or "").strip()
     if not rel_path:
         return None, "no file path"
 
-    provider_dir = get_provider_dir(base_dir, provider).resolve()
-    shared_dir = get_token_dir(base_dir, create=False).resolve()
+    token_dir = get_token_dir(base_dir, create=False).resolve()
 
     cand = Path(rel_path).expanduser()
     if cand.is_absolute():
         target = cand.resolve()
     else:
-        p1 = (provider_dir / cand).resolve()
-        p2 = (shared_dir / cand).resolve()
-        if p1.exists() and _is_path_under(p1, provider_dir):
-            target = p1
-        elif _is_path_under(p2, shared_dir):
-            target = p2
-        else:
-            target = p1
+        target = (token_dir / cand).resolve()
 
-    if _is_path_under(target, provider_dir) or _is_path_under(target, shared_dir):
+    if _is_path_under(target, token_dir):
         return target, None
-    return None, "path outside allowed token dirs"
+    return None, "path outside allowed token dir"
 
 
 def get_pid_file(base_dir, provider):
@@ -811,42 +765,6 @@ def rewrite_auth_dir_in_config(config_path, auth_dir):
     config_path.write_text(text, encoding="utf-8")
 
 
-def _sync_legacy_tokens_to_shared(base_dir, provider):
-    """Sync legacy provider token files into shared token directory.
-
-    Returns (copied_count, updated_count).
-    """
-    shared_dir = get_token_dir(base_dir, create=True)
-    legacy_dir = get_provider_dir(base_dir, provider)
-    copied = 0
-    updated = 0
-
-    for pfx in _token_prefixes_for_provider(provider):
-        for src in legacy_dir.glob("{}-*.json".format(pfx)):
-            if not src.exists() or not src.is_file():
-                continue
-            dst = shared_dir / src.name
-            try:
-                if src.resolve() == dst.resolve():
-                    continue
-            except Exception:
-                pass
-
-            try:
-                if not dst.exists():
-                    shutil.copy2(str(src), str(dst))
-                    copied += 1
-                else:
-                    src_m = src.stat().st_mtime
-                    dst_m = dst.stat().st_mtime
-                    if src_m > dst_m:
-                        shutil.copy2(str(src), str(dst))
-                        updated += 1
-            except Exception:
-                pass
-
-    return copied, updated
-
 
 def rewrite_secret_in_config(config_path, secret):
     text = config_path.read_text(encoding="utf-8")
@@ -880,16 +798,12 @@ def ensure_tokens(base_dir, provider):
         exe.name, provider, login_flag)
 
     token_dir = get_token_dir(base_dir, create=True)
-    copied, updated = _sync_legacy_tokens_to_shared(base_dir, provider)
 
     config_path = get_config_file(base_dir, provider)
     if config_path.exists():
         rewrite_auth_dir_in_config(config_path, token_dir)
 
     tokens = get_token_infos(base_dir, provider)
-
-    if copied or updated:
-        print("[cc-proxy] token sync: copied={}, updated={}".format(copied, updated))
 
     if not tokens:
         print("[cc-proxy] WARNING: No token files found for '{}'.".format(provider))
@@ -936,10 +850,7 @@ def start_proxy(base_dir, provider, quiet=False):
         shutil.copy(root_bootstrap, config_path)
 
     token_dir = get_token_dir(base_dir, create=True)
-    copied, updated = _sync_legacy_tokens_to_shared(base_dir, provider)
     rewrite_auth_dir_in_config(config_path, token_dir)
-    if (copied or updated) and (not quiet):
-        print("[cc-proxy] token sync: copied={}, updated={}".format(copied, updated))
 
     existing_pid = resolve_pid_by_port(PORTS[provider])
     if existing_pid:
