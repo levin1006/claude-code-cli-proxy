@@ -2003,8 +2003,14 @@ def _print_status_dashboard(base_dir, provider, status, W,
     all_ok = True
     if has_accounts:
         # --- accounts section ---
+        token_dir_path = str(get_token_dir(base_dir, create=False))
+        max_path_w = W - 22
+        if len(token_dir_path) > max_path_w:
+            token_dir_path = "…" + token_dir_path[-(max_path_w - 1):]
+        token_dir_line = "  " + _C_DIM + "token-dir: {}".format(token_dir_path) + _C_RESET
         print(_box_line("", W))
         print(_box_line("  Accounts", W))
+        print(_box_line(token_dir_line, W))
         print(_box_line(divider, W))
         for f in files:
             email = f.get("email", f.get("name", "?"))
@@ -2218,14 +2224,24 @@ def _print_status_dashboard(base_dir, provider, status, W,
         else:
             verdict = _C_RED + "  \u26a0 Some accounts degraded" + _C_RESET
         print(_box_line(verdict, W))
-        if proxy_models:
-            model_ids = sorted(m.get("id", "") for m in proxy_models.get("data", []))
-            if model_ids:
-                print(_box_line("", W))
-                print(_box_line("  Available Models ({})".format(len(model_ids)), W))
-                print(_box_line(cdiv, W))
-                for mid in model_ids:
-                    print(_box_line("    {}".format(mid[:60]), W))
+        # Use per-account model union (matches the "N models" count shown per account row).
+        # Fall back to proxy_models only if per-account data isn't available.
+        if models_per_account:
+            acct_model_ids = sorted(
+                {mid for mlist in models_per_account.values() if mlist for mid in mlist}
+            )
+        else:
+            acct_model_ids = None
+
+        model_ids = acct_model_ids if acct_model_ids is not None else (
+            sorted(m.get("id", "") for m in (proxy_models or {}).get("data", []))
+        )
+        if model_ids:
+            print(_box_line("", W))
+            print(_box_line("  Available Models ({})".format(len(model_ids)), W))
+            print(_box_line(cdiv, W))
+            for mid in model_ids:
+                print(_box_line("    {}".format(mid[:60]), W))
 
     print(_box_line("", W))
     _BOX_EDGE_COLOR = prev_edge_color
