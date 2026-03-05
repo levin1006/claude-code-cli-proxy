@@ -47,9 +47,12 @@ cc-proxy-short()      { _cc_proxy status -s       "$@"; }  # compact one-line-pe
 cc-proxy-ui()         { _cc_proxy ui             "$@"; }
 cc-proxy-links()      { _cc_proxy links      "$@"; }
 cc-proxy-stop()       { _cc_proxy stop       "$@"; }
-cc-proxy-auth()       { _cc_proxy auth       "$@"; }
-cc-proxy-set-secret() { _cc_proxy set-secret "$@"; }
-cc-proxy-usage-clear() { _cc_proxy usage-clear "$@"; }
+cc-proxy-auth()        { _cc_proxy auth         "$@"; }
+cc-proxy-token-dir()   { _cc_proxy token-dir    "$@"; }
+cc-proxy-token-list()  { _cc_proxy token-list   "$@"; }
+cc-proxy-token-delete(){ _cc_proxy token-delete "$@"; }
+cc-proxy-set-secret()  { _cc_proxy set-secret   "$@"; }
+cc-proxy-usage-clear() { _cc_proxy usage-clear  "$@"; }
 cc_proxy_install_profile() { _cc_proxy install-profile; }
 
 # Profile hint on first source

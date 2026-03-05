@@ -52,13 +52,19 @@
 
 - [ ] cc-proxy.py 코드가 너무 길어짐. 모듈화하여 접근성을 높여야 함
 
-- [ ] 토큰 관리 위치 일원화 및 auth files 로드 기능 추가
-  - 기존 provider별 config 디렉토리에 보관하던 auth file을 한 디렉토리 안에서 관리하고 file 명의 prefix로 구분
-  - 설치 위치에서 민감 정보인 토큰을 관리하는 것은 위험하기 때문.
-  - cc-proxy-auth를 실행시 별도 설정이 없으면 실행하는 위치에 파일 생성하여 사용자가 따로 관리할 수 있게 함
-  - cc-proxy에서는 지정한 위치에서 auth files를 불러오는 것을 시도하고 로드할 파일 경로를 설정하는 기능을 추가
+- [x] 토큰 관리 위치 일원화 및 auth files 로드 기능 추가
+  - 공용 토큰 디렉터리 도입: `cc-proxy token-dir [path]` (기본 `configs/tokens`, ENV `CC_PROXY_TOKEN_DIR` 우선)
+  - auth 실행 시 공용 토큰 디렉터리로 저장되도록 처리 (`CLIPROXY_AUTH_DIR`/`AUTH_DIR` 주입)
+  - 병행 탐색 전환: 공용 경로 + 기존 provider 경로를 함께 스캔하여 점진 이전 지원
+  - shared에 동명 파일 있으면 legacy 중복 표시 제거 (by filename dedup)
 
-- [ ] 파일(토큰) 열람 및 삭제 기능
+- [x] 파일(토큰) 열람 및 삭제 기능
+  - `cc-proxy token-list [provider]`
+  - `cc-proxy token-delete <provider> <token-file-or-path> [--yes]`
+  - 삭제 안전장치: provider prefix 검증 + 허용 디렉터리(legacy/shared) 경계 검사
+  - 매칭: 파일명·파일명(확장자 없음)·전체경로·이메일 주소 모두 허용
+  - _dedupe_auth_files에 provider prefix 필터 추가 → TUI/status/check 모두 자신의 토큰만 표시
+  - README 및 가이드 문서 업데이트 (토큰 관리 전략 섹션 추가)
 
 - [x] quota 캐싱 (TTL 30초)
   - `/tmp/cc-proxy-quota-{provider}-{md5(auth_index)[:12]}.json` 계정별 캐시 파일

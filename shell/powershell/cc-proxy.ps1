@@ -49,9 +49,12 @@ function cc-proxy-quota      { _cc_proxy status --quota @args }
 function cc-proxy-short      { _cc_proxy status -s      @args }  # compact one-line-per-provider
 function cc-proxy-ui         { _cc_proxy ui            @args }
 function cc-proxy-links      { _cc_proxy links      @args }
-function cc-proxy-stop       { _cc_proxy stop       @args }
-function cc-proxy-auth       { _cc_proxy auth       @args }
-function cc-proxy-set-secret { _cc_proxy set-secret @args }
+function cc-proxy-stop         { _cc_proxy stop         @args }
+function cc-proxy-auth         { _cc_proxy auth         @args }
+function cc-proxy-token-dir    { _cc_proxy token-dir    @args }
+function cc-proxy-token-list   { _cc_proxy token-list   @args }
+function cc-proxy-token-delete { _cc_proxy token-delete @args }
+function cc-proxy-set-secret   { _cc_proxy set-secret   @args }
 function Install-CCProxyProfile { _cc_proxy install-profile }
 
 # Profile hint on first dot-source
