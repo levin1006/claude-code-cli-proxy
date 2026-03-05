@@ -11,7 +11,7 @@ Usage:
   python3 core/cc_proxy.py ui [provider]
   python3 core/cc_proxy.py links [provider]
   python3 core/cc_proxy.py auth <provider>
-  python3 core/cc_proxy.py token-dir [path]
+  python3 core/cc_proxy.py token-dir [path|--reset]
   python3 core/cc_proxy.py token-list [provider]
   python3 core/cc_proxy.py token-delete <provider> <token-file-or-path> [--yes]
   python3 core/cc_proxy.py set-secret <secret>
@@ -3023,38 +3023,52 @@ def cmd_set_secret(base_dir, secret):
         print("[cc-proxy] Restarted {} running provider(s).".format(restarted))
 
 
-def cmd_token_dir(base_dir, token_dir=None):
+def _propagate_token_dir(base_dir, resolved):
+    """Update all provider configs and restart running providers with new token-dir."""
+    updated = 0
+    for pvd in PROVIDERS:
+        config_path = get_config_file(base_dir, pvd)
+        if config_path.exists():
+            rewrite_auth_dir_in_config(config_path, resolved)
+            updated += 1
+    if updated:
+        print("[cc-proxy] Updated auth-dir in {} provider config(s).".format(updated))
+
+    restarted = 0
+    for pvd in PROVIDERS:
+        if resolve_pid_by_port(PORTS[pvd]):
+            print("[cc-proxy] Restarting provider: {}".format(pvd))
+            stop_proxy(base_dir, pvd, quiet=True)
+            if start_proxy(base_dir, pvd, quiet=True):
+                restarted += 1
+            else:
+                print("[cc-proxy] Failed to restart: {}".format(pvd), file=sys.stderr)
+    if restarted:
+        print("[cc-proxy] Restarted {} running provider(s).".format(restarted))
+    else:
+        print("[cc-proxy] No running providers — new token-dir takes effect on next start.")
+
+
+def cmd_token_dir(base_dir, token_dir=None, reset=False):
+    if reset:
+        meta_path = base_dir / TOKEN_DIR_META_FILE
+        if meta_path.exists():
+            meta_path.unlink()
+            print("[cc-proxy] token-dir reset to default.")
+        else:
+            print("[cc-proxy] token-dir is already using the default (no override set).")
+        default_dir = base_dir / "configs" / "tokens"
+        _propagate_token_dir(base_dir, default_dir)
+        print("[cc-proxy] token-dir: {}".format(default_dir))
+        return 0
+
     if token_dir:
         resolved = Path(token_dir).expanduser().resolve()
         resolved.mkdir(parents=True, exist_ok=True)
         _save_token_dir_metadata(base_dir, resolved)
         print("[cc-proxy] token-dir set: {}".format(resolved))
         print("[cc-proxy] Hint: export {}='{}' to override per session.".format(TOKEN_DIR_ENV, resolved))
-
-        # propagate new auth-dir to all provider configs immediately
-        updated = 0
-        for pvd in PROVIDERS:
-            config_path = get_config_file(base_dir, pvd)
-            if config_path.exists():
-                rewrite_auth_dir_in_config(config_path, resolved)
-                updated += 1
-        if updated:
-            print("[cc-proxy] Updated auth-dir in {} provider config(s).".format(updated))
-
-        # restart running providers so the binary picks up the new auth-dir
-        restarted = 0
-        for pvd in PROVIDERS:
-            if resolve_pid_by_port(PORTS[pvd]):
-                print("[cc-proxy] Restarting provider: {}".format(pvd))
-                stop_proxy(base_dir, pvd, quiet=True)
-                if start_proxy(base_dir, pvd, quiet=True):
-                    restarted += 1
-                else:
-                    print("[cc-proxy] Failed to restart: {}".format(pvd), file=sys.stderr)
-        if restarted:
-            print("[cc-proxy] Restarted {} running provider(s).".format(restarted))
-        else:
-            print("[cc-proxy] No running providers — new token-dir takes effect on next start.")
+        _propagate_token_dir(base_dir, resolved)
         return 0
 
     current = get_token_dir(base_dir, create=False)
@@ -3357,7 +3371,10 @@ def main():
         return 0
 
     elif cmd == "token-dir":
-        token_dir = args[1] if len(args) > 1 else None
+        rest = args[1:]
+        if rest and rest[0] == "--reset":
+            return cmd_token_dir(base_dir, reset=True)
+        token_dir = rest[0] if rest else None
         return cmd_token_dir(base_dir, token_dir)
 
     elif cmd == "token-list":
