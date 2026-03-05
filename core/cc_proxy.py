@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 
 IS_WINDOWS = sys.platform == "win32"
 
-PROVIDERS = ("antigravity", "claude", "codex", "gemini")
+PROVIDERS = ("codex", "claude", "antigravity", "gemini")
 
 PORTS = {
     "antigravity": 18417,
