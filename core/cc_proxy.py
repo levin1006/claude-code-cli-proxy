@@ -1738,7 +1738,19 @@ def _tui_key_to_action(key):
         return _TUI_KEY_ESC
     if key == " ":
         return "toggle"
-    lk = key.lower()
+
+    lk = unicodedata.normalize("NFKC", key.lower())
+    # Support Korean 2-set layout without switching to English:
+    # ㅁ/ㄴ/ㅈ/ㅇ → a/s/w/d, ㄱ/ㅂ → r/q
+    lk = {
+        "ㅁ": "a", "ᄆ": "a",
+        "ㄴ": "s", "ᄂ": "s",
+        "ㅈ": "w", "ᄌ": "w",
+        "ㅇ": "d", "ᄋ": "d",
+        "ㄱ": "r", "ᄀ": "r",
+        "ㅂ": "q", "ᄇ": "q",
+    }.get(lk, lk)
+
     if lk in ("q", "r"):
         return lk
     if lk in ("a", "s", "w", "d"):
@@ -2095,7 +2107,7 @@ def _tui_render(base_dir, state):
         tabs.append(label)
     tab_line = "  " + "   ".join(tabs)
 
-    footer_keys = "  a d provider   w s account   space toggle   r refresh   q quit"
+    footer_keys = "  a/d provider   w/s account   space toggle   r refresh   q quit"
     if state.get("message"):
         msg = "  " + state["message"]
     else:
