@@ -3119,6 +3119,31 @@ def cmd_token_dir(base_dir, token_dir=None):
         _save_token_dir_metadata(base_dir, resolved)
         print("[cc-proxy] token-dir set: {}".format(resolved))
         print("[cc-proxy] Hint: export {}='{}' to override per session.".format(TOKEN_DIR_ENV, resolved))
+
+        # propagate new auth-dir to all provider configs immediately
+        updated = 0
+        for pvd in PROVIDERS:
+            config_path = get_config_file(base_dir, pvd)
+            if config_path.exists():
+                rewrite_auth_dir_in_config(config_path, resolved)
+                updated += 1
+        if updated:
+            print("[cc-proxy] Updated auth-dir in {} provider config(s).".format(updated))
+
+        # restart running providers so the binary picks up the new auth-dir
+        restarted = 0
+        for pvd in PROVIDERS:
+            if resolve_pid_by_port(PORTS[pvd]):
+                print("[cc-proxy] Restarting provider: {}".format(pvd))
+                stop_proxy(base_dir, pvd, quiet=True)
+                if start_proxy(base_dir, pvd, quiet=True):
+                    restarted += 1
+                else:
+                    print("[cc-proxy] Failed to restart: {}".format(pvd), file=sys.stderr)
+        if restarted:
+            print("[cc-proxy] Restarted {} running provider(s).".format(restarted))
+        else:
+            print("[cc-proxy] No running providers — new token-dir takes effect on next start.")
         return 0
 
     current = get_token_dir(base_dir, create=False)
