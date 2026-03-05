@@ -32,7 +32,24 @@
       "WebFetch(domain:code.visualstudio.com)",
       "Bash(chmod +x:*)",
       "Bash(echo:*)",
-      "Bash(xargs sh:*)"
+      "Bash(xargs sh:*)",
+      "Bash(zsh:*)",
+      "Bash(mkdir:*)",
+      "Bash(ps:*)",
+      "Bash(do echo:*)",
+      "Bash(echo === $endpoint ===:*)",
+      "Bash(tmux set:*)",
+      "Bash(cp:*)",
+      "Bash(grep:*)",
+      "Bash(do:*)",
+      "mcp__plugin_serena_serena__search_for_pattern",
+      "Bash(sh:*)",
+      "Bash(wc:*)",
+      "Bash(xxd:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(CC_PROXY_SECRET=wrongkey:*)",
+      "mcp__plugin_serena_serena__replace_content",
+      "WebSearch"
     ]
   }
 }
