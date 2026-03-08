@@ -399,7 +399,7 @@ def main() -> None:
 
     write_install_metadata(args.repo, args.tag, platform_key, source_mode, local_root)
     setup_profile()
-    print("\n✅ Installation complete!")
+    print("\nInstallation complete!")
 
 
 if __name__ == "__main__":

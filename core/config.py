@@ -28,23 +28,27 @@ def rewrite_port_in_config(config_path, port):
 
 def rewrite_auth_dir_in_config(config_path, auth_dir):
     text = config_path.read_text(encoding="utf-8")
-    auth_dir = str(Path(auth_dir).expanduser().resolve())
+    auth_dir_str = str(Path(auth_dir).expanduser().resolve()).replace("\\", "/")
     if re.search(r"^\s*auth-dir\s*:", text, re.MULTILINE):
+        def _replace_auth_dir(m):
+            return '{}"{}"'.format(m.group(1), auth_dir_str)
         text = re.sub(
             r"(?m)^(\s*auth-dir\s*:\s*).*$",
-            r'\g<1>"{}"'.format(auth_dir),
+            _replace_auth_dir,
             text,
         )
     else:
-        text = "auth-dir: \"{}\"\n".format(auth_dir) + text
+        text = 'auth-dir: "{}"\n'.format(auth_dir_str) + text
     config_path.write_text(text, encoding="utf-8")
 
 
 def rewrite_secret_in_config(config_path, secret):
     text = config_path.read_text(encoding="utf-8")
+    def _replace_secret(m):
+        return '{}"{}"'.format(m.group(1), secret)
     text = re.sub(
         r'(?m)^(\s*secret-key:\s*)"[^"]*"',
-        r'\g<1>"{}"'.format(secret),
+        _replace_secret,
         text
     )
     config_path.write_text(text, encoding="utf-8")
