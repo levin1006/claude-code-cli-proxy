@@ -289,14 +289,40 @@ def install_shims(system: str) -> None:
 
 def setup_profile() -> None:
     import platform
+    import subprocess
 
     system = platform.system().lower()
 
     if system == "windows":
+        profile_line = f". \"{INSTALL_DIR}\\shell\\powershell\\cc-proxy.ps1\""
+        try:
+            # Resolves the current user's $PROFILE for the default PowerShell host
+            # and appends the line if it doesn't already exist.
+            ps_cmd = (
+                "$p = $PROFILE;"
+                "if (-Not (Test-Path -Path $p)) {"
+                "    New-Item -Path $p -Type File -Force | Out-Null;"
+                "}"
+                "$c = Get-Content -Path $p -Raw -ErrorAction SilentlyContinue;"
+                f"if (-not $c -or -not $c.Contains('{profile_line}')) {{"
+                f"    Out-File -FilePath $p -Append -Encoding utf8 -InputObject '`n{profile_line}';"
+                "    Write-Host \"Added profile line to $p\";"
+                "} else {"
+                "    Write-Host \"Profile line already exists in $p\";"
+                "}"
+            )
+            subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], check=True)
+        except Exception as e:
+            print(f"Warning: Failed to auto-configure PowerShell profile: {e}")
+            print("\n--- Setup Profile ---")
+            print("To complete setup, run the following in PowerShell:")
+            print(f"  . {INSTALL_DIR}\\shell\\powershell\\cc-proxy.ps1")
+            print("  Install-CCProxyProfile")
+
         print("\n--- Setup Profile ---")
-        print("To complete setup, run the following in PowerShell:")
+        print("To apply changes immediately in the current Windows session, run:")
         print(f"  . {INSTALL_DIR}\\shell\\powershell\\cc-proxy.ps1")
-        print("  Install-CCProxyProfile")
+        print("Or restart your PowerShell terminal.")
         return
 
     source_line = f"source {INSTALL_DIR}/shell/bash/cc-proxy.sh"
