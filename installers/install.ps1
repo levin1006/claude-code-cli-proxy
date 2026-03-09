@@ -1,10 +1,15 @@
-# Require minimum PowerShell version and set TLS policy for older clients
+# installers/install.ps1 — Remote Bootstrap Installer
+# Downloads code from GitHub and installs to ~/.cli-proxy/
+# Usage (from anywhere): irm https://raw.githubusercontent.com/.../install.ps1 | iex
+#
+# WARNING: This downloads from the REMOTE main branch.
+#          For local development deployment, use: .\deploy.ps1
 $ErrorActionPreference = 'Stop'
 
 # Set TLS version to 1.2
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-Write-Host "Starting cli-proxy-api installation..."
+Write-Host "Starting cli-proxy-api REMOTE installation..."
 
 function Get-CCProxyPython {
   if (Get-Command py -ErrorAction SilentlyContinue) { return "py" }
