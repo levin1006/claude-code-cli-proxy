@@ -28,6 +28,7 @@ def run_auth(base_dir, provider):
         return False
 
     wd = get_provider_dir(base_dir, provider)
+    wd.mkdir(parents=True, exist_ok=True)
     config_path = get_config_file(base_dir, provider)
     if not config_path.exists():
         root_bootstrap = base_dir / "config.yaml"
