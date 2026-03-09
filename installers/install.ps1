@@ -6,13 +6,25 @@ $ErrorActionPreference = 'Stop'
 
 Write-Host "Starting cli-proxy-api installation..."
 
-# Check requirements
-try {
-    $null = Get-Command "python" -ErrorAction Stop
-} catch {
-    Write-Error "Error: python is required for installation. Please install Python 3.8+."
-    exit 1
+function Get-CCProxyPython {
+  if (Get-Command py -ErrorAction SilentlyContinue) { return "py" }
+  if (Get-Command python3 -ErrorAction SilentlyContinue) { return "python3" }
+  if (Get-Command python -ErrorAction SilentlyContinue) { return "python" }
+  
+  $searchPaths = @(
+      Join-Path $env:LOCALAPPDATA "Programs\Python\Python*\python.exe",
+      Join-Path $env:ProgramFiles "Python*\python.exe",
+      Join-Path $env:SystemDrive "Python*\python.exe"
+  )
+  foreach ($pattern in $searchPaths) {
+      $found = Get-Item $pattern -ErrorAction SilentlyContinue | Sort-Object CreationTime -Descending | Select-Object -First 1
+      if ($found) { return $found.FullName }
+  }
+  Write-Error "Error: python is required for installation. Please install Python 3.8+."
+  exit 1
 }
+
+$pythonCmd = Get-CCProxyPython
 
 $repo = if ($env:CC_PROXY_INSTALL_REPO) { $env:CC_PROXY_INSTALL_REPO } else { "levin1006/claude-code-cli-proxy" }
 $requestedTag = if ($env:CC_PROXY_INSTALL_TAG) { $env:CC_PROXY_INSTALL_TAG } else { "main" }
@@ -92,7 +104,7 @@ $pyArgs = @("--repo", $repo, "--tag", $requestedTag, "--source", $sourceMode)
 if ($localPath) {
     $pyArgs += @("--local-path", $localPath)
 }
-& python $tempScript @pyArgs
+& $pythonCmd $tempScript @pyArgs
 
 # Cleanup
 if (Test-Path $tempScript) {
