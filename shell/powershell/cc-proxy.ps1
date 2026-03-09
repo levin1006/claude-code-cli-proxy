@@ -5,9 +5,25 @@
 # Auto-detect base dir (fixes hardcoded D:\OneDrive\... path bug)
 $global:CLI_PROXY_BASE_DIR = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
-$script:_CC_PROXY_PY     = if (Get-Command py      -ErrorAction SilentlyContinue) { "py"      } `
-                          elseif (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } `
-                          else { "python" }
+function Get-CCProxyPython {
+  if (Get-Command py -ErrorAction SilentlyContinue) { return "py" }
+  if (Get-Command python3 -ErrorAction SilentlyContinue) { return "python3" }
+  if (Get-Command python -ErrorAction SilentlyContinue) { return "python" }
+  
+  # Fallback to common Windows Python installation paths if not in PATH
+  $searchPaths = @(
+      Join-Path $env:LOCALAPPDATA "Programs\Python\Python*\python.exe",
+      Join-Path $env:ProgramFiles "Python*\python.exe",
+      Join-Path $env:SystemDrive "Python*\python.exe"
+  )
+  foreach ($pattern in $searchPaths) {
+      $found = Get-Item $pattern -ErrorAction SilentlyContinue | Sort-Object CreationTime -Descending | Select-Object -First 1
+      if ($found) { return $found.FullName }
+  }
+  return "python"
+}
+
+$script:_CC_PROXY_PY     = Get-CCProxyPython
 $script:_CC_PROXY_SCRIPT = Join-Path $global:CLI_PROXY_BASE_DIR "core\cc_proxy.py"
 
 function _cc_proxy_guard_repo_run {
