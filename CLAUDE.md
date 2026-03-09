@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - This repo is an **operations/config workspace** for a prebuilt CLIProxyAPI binary, not the source code of the proxy itself.
 - **Supported platforms**: Windows (PowerShell) and Linux Ubuntu (Bash).
 - **Python 3.8+** required (stdlib only, no pip install).
-- Binary version in this repo: `CLIProxyAPI_6.8.24_windows_amd64`.
+- Binary version in this repo: `CLIProxyAPI_6.8.48_windows_amd64`.
 - Main moving parts:
   - `CLIProxyAPI/windows/amd64/cli-proxy-api.exe` (Windows binary, prebuilt)
   - `CLIProxyAPI/linux/amd64/cli-proxy-api` (Linux amd64 binary)

@@ -62,6 +62,12 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     }
 }
 
+if (-not $localPath) {
+    if ($sourceMode -eq "local" -or $sourceMode -eq "auto") {
+        $localPath = (Get-Location).Path
+    }
+}
+
 if ($sourceMode -and @("remote", "local", "auto") -notcontains $sourceMode) {
     Write-Error "Error: --source must be one of: remote, local, auto"
     exit 1
