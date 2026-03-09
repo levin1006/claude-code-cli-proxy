@@ -1,4 +1,9 @@
-# CLIProxyAPI + Claude Code Helper Installer Wrapper (Windows)
+# deploy.ps1 — Local Deployment Script
+# Copies the current LOCAL repo code into ~/.cli-proxy/
+# Usage: .\deploy.ps1
+#
+# NOTE: This is NOT the remote installer.
+#       For fresh install from GitHub, use: .\installers\install.ps1
 
 function Get-CCProxyPython {
   if (Get-Command py -ErrorAction SilentlyContinue) { return "py" }
@@ -19,16 +24,15 @@ function Get-CCProxyPython {
 
 $pythonPath = Get-CCProxyPython
 
-# Script is now in shell/powershell/, so installer is at ../../installers/install.py
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$installScript = Join-Path $repoRoot "installers\install.py"
+# deploy.ps1 is at repo root, so installers/install.py is a direct child
+$installScript = Join-Path $PSScriptRoot "installers\install.py"
 
-Write-Host "[Installer] Using Python executable at: $pythonPath" -ForegroundColor Cyan
-Set-Location -Path $repoRoot
+Write-Host "[deploy] Local deployment: repo -> ~/.cli-proxy/" -ForegroundColor Cyan
+Write-Host "[deploy] Using Python: $pythonPath" -ForegroundColor DarkGray
 & $pythonPath $installScript --source local
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "[Installer] Failed to complete installation." -ForegroundColor Red
+    Write-Host "[deploy] Failed." -ForegroundColor Red
 } else {
-    Write-Host "[Installer] Done." -ForegroundColor Green
+    Write-Host "[deploy] Done. Run '. C:\Users\user\.cli-proxy\shell\powershell\cc-proxy.ps1' to reload." -ForegroundColor Green
 }
