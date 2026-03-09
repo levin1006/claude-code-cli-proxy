@@ -302,18 +302,30 @@ def _aggregate_per_account(usage_data):
         for model_data in api_data.get("models", {}).values():
             for detail in model_data.get("details", []):
                 src = detail.get("source", "unknown")
-                tok = detail.get("tokens", {}).get("total_tokens", 0)
+                tokens = detail.get("tokens", {})
+                tok = tokens.get("total_tokens", 0)
                 ts  = detail.get("timestamp", "")
                 failed = detail.get("failed", False)
                 if src not in account_stats:
-                    account_stats[src] = {"requests": 0, "tokens": 0, "fails": 0, "last_time": "", "last_tok": 0}
+                    account_stats[src] = {
+                        "requests": 0, "tokens": 0, "fails": 0,
+                        "input": 0, "output": 0, "reasoning": 0,
+                        "last_time": "", "last_tok": 0,
+                        "last_input": 0, "last_output": 0, "last_reasoning": 0,
+                    }
                 account_stats[src]["requests"] += 1
                 account_stats[src]["tokens"] += tok
+                account_stats[src]["input"] += int(tokens.get("input_tokens", 0) or 0)
+                account_stats[src]["output"] += int(tokens.get("output_tokens", 0) or 0)
+                account_stats[src]["reasoning"] += int(tokens.get("reasoning_tokens", 0) or 0)
                 if failed:
                     account_stats[src]["fails"] += 1
                 if ts > account_stats[src]["last_time"]:
                     account_stats[src]["last_time"] = ts
                     account_stats[src]["last_tok"] = tok
+                    account_stats[src]["last_input"] = int(tokens.get("input_tokens", 0) or 0)
+                    account_stats[src]["last_output"] = int(tokens.get("output_tokens", 0) or 0)
+                    account_stats[src]["last_reasoning"] = int(tokens.get("reasoning_tokens", 0) or 0)
     return account_stats
 
 
@@ -568,18 +580,25 @@ def _print_status_dashboard(base_dir, provider, status, W,
         for model_name, model_data in api_data.get("models", {}).items():
             details = model_data.get("details", [])
             req_count = len(details)
-            tok_count = sum(d.get("tokens", {}).get("total_tokens", 0) for d in details)
+            input_tok = sum(int(d.get("tokens", {}).get("input_tokens", 0) or 0) for d in details)
+            output_tok = sum(int(d.get("tokens", {}).get("output_tokens", 0) or 0) for d in details)
+            reason_tok = sum(int(d.get("tokens", {}).get("reasoning_tokens", 0) or 0) for d in details)
             if model_name not in model_stats:
-                model_stats[model_name] = {"requests": 0, "tokens": 0}
+                model_stats[model_name] = {"requests": 0, "input": 0, "output": 0, "reasoning": 0}
             model_stats[model_name]["requests"] += req_count
-            model_stats[model_name]["tokens"] += tok_count
+            model_stats[model_name]["input"] += input_tok
+            model_stats[model_name]["output"] += output_tok
+            model_stats[model_name]["reasoning"] += reason_tok
 
     if model_stats:
         print(_box_line("", W))
         print(_box_line("  Models:", W))
-        for mname, mdata in sorted(model_stats.items(), key=lambda x: -x[1]["tokens"]):
-            row = "    {:<32}  {:>5} req  {:>8} tokens".format(
-                mname[:32], mdata["requests"], _fmt_tokens(mdata["tokens"])
+        for mname, mdata in sorted(model_stats.items(), key=lambda x: -(x[1]["input"] + x[1]["output"] + x[1]["reasoning"])):
+            reason_str = "  \U0001f4ad{}".format(_fmt_tokens(mdata["reasoning"])) if mdata["reasoning"] > 0 else ""
+            row = "    {:<24}  {:>3} req  in {:>6}  out {:>6}{}".format(
+                mname[:24], mdata["requests"],
+                _fmt_tokens(mdata["input"]), _fmt_tokens(mdata["output"]),
+                reason_str
             )
             print(_box_line(row, W))
 
@@ -605,8 +624,6 @@ def _print_status_dashboard(base_dir, provider, status, W,
             total    = adata["requests"]
             fails    = adata["fails"]
             ok       = total - fails
-            tok      = adata["tokens"]
-            last_tok = adata["last_tok"]
             dt_str   = _fmt_local_dt(adata["last_time"]) if adata["last_time"] else ""
 
             req_str = "{:>3}  {}{:>3}{}  {}{:>3}{}".format(
@@ -615,16 +632,24 @@ def _print_status_dashboard(base_dir, provider, status, W,
                 _C_RED,   fails, _C_RESET,
             )
 
-            last_tok_s  = _fmt_tokens(last_tok)
-            total_tok_s = _fmt_tokens(tok)
+            last_reason = adata.get("last_reasoning", 0)
+            last_in_s = _fmt_tokens(adata.get("last_input", 0))
+            last_out_s = _fmt_tokens(adata.get("last_output", 0))
+            last_reason_s = _fmt_tokens(last_reason) if last_reason > 0 else ""
+            total_in_s = _fmt_tokens(adata.get("input", 0))
+            total_out_s = _fmt_tokens(adata.get("output", 0))
+
             if dt_str:
-                tok_str = "{}{}{} / {}{} \u00b7 {}{}".format(
-                    _C_DIM, last_tok_s, _C_RESET,
-                    total_tok_s,
-                    _C_DIM, dt_str, _C_RESET,
+                last_str = "{}in {} out {}{}".format(
+                    _C_DIM, last_in_s, last_out_s, _C_RESET,
+                )
+                if last_reason_s:
+                    last_str += " \U0001f4ad{}".format(last_reason_s)
+                tok_str = "{} / in {} out {} \u00b7 {}{}{}".format(
+                    last_str, total_in_s, total_out_s, _C_DIM, dt_str, _C_RESET,
                 )
             else:
-                tok_str = total_tok_s
+                tok_str = "in {} out {}".format(total_in_s, total_out_s)
             row = "    {:<20}  {}  {}".format(
                 acct[:20], req_str, tok_str
             )
