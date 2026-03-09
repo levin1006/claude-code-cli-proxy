@@ -1,0 +1,4 @@
+- [x] opus 급 모델을 gpt-5.4(xhigh), sonnet 급 모델을 gpt-5.4(high)로 변경
+  - *완료 코멘트: `core/constants.py`의 `PRESETS` 부분에 `openai`의 모델 대응을 `gpt-5.4(xhigh)`와 `gpt-5.4(high)`로 각각 수정 완료했습니다.*
+- [x] cc-proxy-ui 주기적으로 자동 refresh
+  - *완료 코멘트: `core/tui.py` 메인 루프에서 터미널 응답성을 해치지 않도록 키 입력 대기 중 주기적으로 백그라운드 새로고침(`_refresh_current`)이 트리거되도록 수정 완료했습니다.*
