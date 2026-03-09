@@ -55,6 +55,7 @@ function cc-proxy-token-dir    { _cc_proxy token-dir    @args }
 function cc-proxy-token-list   { _cc_proxy token-list   @args }
 function cc-proxy-token-delete { _cc_proxy token-delete @args }
 function cc-proxy-set-secret   { _cc_proxy set-secret   @args }
+function cc-proxy-version      { _cc_proxy version      @args }
 function Install-CCProxyProfile { _cc_proxy install-profile }
 
 # Profile hint on first dot-source
