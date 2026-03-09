@@ -439,6 +439,7 @@ def start_proxy(base_dir, provider, quiet=False):
         shutil.copy(root_bootstrap, config_path)
 
     token_dir = get_token_dir(base_dir, create=True)
+    rewrite_port_in_config(config_path, PORTS[provider])
     rewrite_auth_dir_in_config(config_path, token_dir)
 
     existing_pid = resolve_pid_by_port(PORTS[provider])
@@ -453,8 +454,6 @@ def start_proxy(base_dir, provider, quiet=False):
         if not quiet:
             print("[cc-proxy] Process on port {} is unhealthy. Stop it first.".format(PORTS[provider]), file=sys.stderr)
         return False
-
-    rewrite_port_in_config(config_path, PORTS[provider])
 
     log_path = str(wd / "main.log")
     if IS_WINDOWS:
