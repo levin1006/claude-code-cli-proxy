@@ -263,7 +263,7 @@ def _dedupe_auth_files(auth_data, provider=None):
             "{}-".format(pfx) for pfx in _token_prefixes_for_provider(provider)
         )
         def _fname(f):
-            name = (f.get("name") or "").strip()
+            name = (f.get("name") or f.get("id") or "").strip()
             if name:
                 return name.split("/")[-1].split("\\")[-1]
             path = (f.get("path") or "").strip()
@@ -298,6 +298,8 @@ def _dedupe_auth_files(auth_data, provider=None):
 def _aggregate_per_account(usage_data):
     """Aggregate usage stats per account from /v0/management/usage response."""
     account_stats = {}
+    if not usage_data:
+        return account_stats
     for api_data in usage_data.get("usage", {}).get("apis", {}).values():
         for model_data in api_data.get("models", {}).values():
             for detail in model_data.get("details", []):
@@ -371,7 +373,7 @@ def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=F
                 mpa = result["models_per_account"]
 
                 def _fetch_models(f, out, _pvd=provider, _sec=secret):
-                    name = f.get("name", "")
+                    name = f.get("name") or f.get("id") or ""
                     if not name:
                         return
                     try:
@@ -392,7 +394,7 @@ def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=F
                 qpa = result["quota_data"]
 
                 def _fetch_quota_one(f, out, _pvd=provider, _sec=secret, _fn=fetcher):
-                    name = f.get("name", "")
+                    name = f.get("name") or f.get("id") or ""
                     auth_index = f.get("auth_index", "")
                     if not name or not auth_index:
                         return
@@ -504,8 +506,8 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line(token_dir_line, W))
         print(_box_line(divider, W))
         for f in files:
-            email = f.get("email", f.get("name", "?"))
-            name = f.get("name", "")
+            email = f.get("email", f.get("name") or f.get("id", "?"))
+            name = f.get("name") or f.get("id", "")
             last_refresh = f.get("last_refresh", "")
             plan_type = (f.get("id_token") or {}).get("plan_type", "")
             time_str = _time_ago(last_refresh) if last_refresh else ""
@@ -542,10 +544,7 @@ def _print_status_dashboard(base_dir, provider, status, W,
             )
             print(_box_line(row, W))
 
-    if not has_usage:
-        print(_box_line("", W))
-        _BOX_EDGE_COLOR = prev_edge_color
-        return
+    pass
 
     # --- usage section ---
     total_req = u.get("total_requests", 0)
@@ -620,6 +619,12 @@ def _print_status_dashboard(base_dir, provider, status, W,
     if acct_stats:
         print(_box_line("", W))
         print(_box_line("  Per-account:", W))
+        header = "    {:<20}  {:>3}  {:>3}  {:>3}  {:<22}  {}".format(
+            "account", "tot", _C_GREEN + " ok" + _C_RESET, _C_RED + "fail" + _C_RESET,
+            "last (in/out)", "total (in/out)"
+        )
+        print(_box_line(header, W))
+        print(_box_line(divider, W))
         for acct, adata in sorted(acct_stats.items(), key=lambda x: -x[1]["tokens"]):
             total    = adata["requests"]
             fails    = adata["fails"]
@@ -667,8 +672,8 @@ def _print_status_dashboard(base_dir, provider, status, W,
         qdiv = "  \u2500\u2500 quota " + "\u2500" * max(0, W - 16)
         print(_box_line(qdiv, W))
         for f in files:
-            name = f.get("name", "")
-            email = f.get("email", f.get("name", "?"))
+            name = f.get("name") or f.get("id", "")
+            email = f.get("email", f.get("name") or f.get("id", "?"))
             plan_type = (f.get("id_token") or {}).get("plan_type", "")
             label = email
             if plan_type:

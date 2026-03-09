@@ -229,13 +229,13 @@ oauth-model-alias:
 #   claude:
 #     - name: "claude-sonnet-4-5-20250929"
 #       alias: "cs4.5"
-#   codex:
-#     - name: "gpt-5.4(xhigh)"
-#       alias: "gpt-5.4(xhigh)"
-#       fork: true
-#     - name: "gpt-5.4(high)"
-#       alias: "gpt-5.4(high)"
-#       fork: true
+  codex:
+    - name: "gpt-5.4(xhigh)"
+      alias: "gpt-5.4-xhigh"
+      fork: true
+    - name: "gpt-5.4(high)"
+      alias: "gpt-5.4-high"
+      fork: true
 #   qwen:
 #     - name: "qwen3-coder-plus"
 #       alias: "qwen-plus"
@@ -271,7 +271,7 @@ oauth-model-alias:
 #     - "kimi-k2-thinking"
 
 # Optional payload configuration
-# payload:
+payload:
 #   default: # Default rules only set parameters when they are missing in the payload.
 #     - models:
 #         - name: "gemini-2.5-pro" # Supports wildcards (e.g., "gemini-*")
@@ -284,17 +284,17 @@ oauth-model-alias:
 #           protocol: "gemini" # restricts the rule to a specific protocol, options: openai, gemini, claude, codex, antigravity
 #       params: # JSON path (gjson/sjson syntax) -> raw JSON value (strings are used as-is, must be valid JSON)
 #         "generationConfig.responseJsonSchema": "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}}}"
-#   override: # Override rules always set parameters, overwriting any existing values.
-#     - models:
-#         - name: "*(xhigh)" # Matches models ending with (xhigh)
-#           protocol: "codex"
-#       params:
-#         "reasoning.effort": "xhigh"
-#     - models:
-#         - name: "*(high)" # Matches models ending with (high)
-#           protocol: "codex"
-#       params:
-#         "reasoning.effort": "high"
+  override:
+    - models:
+        - name: "*-xhigh"
+          protocol: "codex"
+      params:
+        "reasoning.effort": "xhigh"
+    - models:
+        - name: "*-high"
+          protocol: "codex"
+      params:
+        "reasoning.effort": "high"
 #   override-raw: # Override raw rules always set parameters using raw JSON (must be valid JSON).
 #     - models:
 #         - name: "gpt-*" # Supports wildcards (e.g., "gpt-*")
