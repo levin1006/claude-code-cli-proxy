@@ -18,9 +18,13 @@ function Get-CCProxyPython {
 }
 
 $pythonPath = Get-CCProxyPython
-$installScript = Join-Path $PSScriptRoot "installers\install.py"
+
+# Script is now in shell/powershell/, so installer is at ../../installers/install.py
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$installScript = Join-Path $repoRoot "installers\install.py"
 
 Write-Host "[Installer] Using Python executable at: $pythonPath" -ForegroundColor Cyan
+Set-Location -Path $repoRoot
 & $pythonPath $installScript --source local
 
 if ($LASTEXITCODE -ne 0) {
