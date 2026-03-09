@@ -17,7 +17,7 @@ CLI 대시보드에도 반영한다.
 | `GET /v0/management/config` | 미사용 | 전체 설정 (routing.strategy 등) |
 | `GET /v0/management/quota` | **404** | 전용 quota 엔드포인트 없음 |
 
-- codex `auth-files` 응답에 `id_token.plan_type` (pro/plus 등), 구독 기간 포함
+- openai `auth-files` 응답에 `id_token.plan_type` (pro/plus 등), 구독 기간 포함
 - quota 데이터는 management API에 없음 → 웹 대시보드는 upstream provider API를 직접 호출하는 것으로 추정. CLI에서는 `status`/`status_message` 필드로 간접 표시
 
 ## 수정 파일
@@ -50,13 +50,13 @@ CLI 대시보드에도 반영한다.
 - `status` / `status_message`: runtime 상태 표시 (active 대신 실제 상태)
 - `unavailable`: 사용 불가 계정 표시
 - `last_refresh`: 마지막 갱신 시각 (`_time_ago()` 활용)
-- `id_token.plan_type` (codex): 구독 유형 표시
+- `id_token.plan_type` (openai): 구독 유형 표시
 
 계정 행 포맷 변경:
 ```
 현재: user@example.com                              active
 변경: user@example.com                  3m ago  active
-      user@codex.com                    pro     5m ago  active
+      user@openai.com                    pro     5m ago  active
 ```
 
 ### Step 4: 병렬 API 호출 (threading)

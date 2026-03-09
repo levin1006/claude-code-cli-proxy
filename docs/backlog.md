@@ -28,7 +28,7 @@
   - /v0/management/api-call 엔드포인트로 upstream provider API 프록시 호출
   - antigravity: fetchAvailableModels → quotaInfo.remainingFraction
   - claude: oauth/usage → five_hour / seven_day / seven_day_opus utilization
-  - codex: wham/usage → primary_window / secondary_window used_percent
+  - openai: wham/usage → primary_window / secondary_window used_percent
   - 진행바 (10칸) + 리셋 시간 표시, 색상 구분 (≥80% 기본 / 40-79% 노랑 / <40% 빨강)
   - cc-proxy-check alias → cc-proxy-status --check, 신규 cc-proxy-quota alias 추가
 

@@ -76,7 +76,7 @@ release asset 없이도 설치 결과 재현성을 확보할 수 있습니다.
 2. 설치 후 기본 동작 확인
    - `cc-proxy-status`
    - `cc-proxy-links`
-   - `cc-codex` 시작 단계
+   - `cc-openai` 시작 단계
 3. 설치 추적 파일 확인
    - `~/.cli-proxy/.installed-tag`
    - `~/.cli-proxy/.install-meta.json`

@@ -37,7 +37,7 @@ function cc {
 # Provider entrypoints
 function cc-ag-claude  { _cc_proxy run ag-claude -- @args }
 function cc-claude     { _cc_proxy run claude    -- @args }
-function cc-codex      { _cc_proxy run codex     -- @args }
+function cc-openai     { _cc_proxy run openai    -- @args }
 function cc-gemini     { _cc_proxy run gemini    -- @args }
 function cc-ag-gemini  { _cc_proxy run ag-gemini -- @args }
 

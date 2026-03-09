@@ -34,7 +34,7 @@ cc() {
 # Provider entrypoints
 cc-ag-claude()  { _cc_proxy run ag-claude -- "$@"; }
 cc-claude()     { _cc_proxy run claude    -- "$@"; }
-cc-codex()      { _cc_proxy run codex     -- "$@"; }
+cc-openai()     { _cc_proxy run openai    -- "$@"; }
 cc-gemini()     { _cc_proxy run gemini    -- "$@"; }
 cc-ag-gemini()  { _cc_proxy run ag-gemini -- "$@"; }
 
