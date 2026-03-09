@@ -13,8 +13,11 @@ remote-management:
   allow-remote: false
 # Management key. If a plaintext value is provided here, it will be hashed on startup.
 # All management requests (even from localhost) require this key.
-# Leave empty to disable the Management API entirely (404# Provider 3: OpenAI (via Codex bridge API but named openai)
-openai:
+# Leave empty to disable the Management API entirely (404)
+  secret-key: "cc"
+
+# Provider 3: OpenAI (via Codex bridge API but named openai)
+codex:
   listen-port: 18419
   auth-dir: ""
   secret-key: "cc"
