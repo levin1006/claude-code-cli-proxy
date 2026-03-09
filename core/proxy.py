@@ -33,6 +33,22 @@ from usage import (
 )
 
 
+def get_binary_version(base_dir):
+    """Run cli-proxy-api -h and extract the CLIProxyAPI Version line."""
+    exe = get_binary_path(base_dir)
+    if not exe.exists():
+        return "Not found"
+    try:
+        res = subprocess.run([str(exe), "-h"], capture_output=True, text=True, timeout=2)
+        out = res.stdout + res.stderr
+        for line in out.splitlines():
+            if line.startswith("CLIProxyAPI Version:"):
+                return line.strip()
+    except Exception:
+        pass
+    return "Unknown"
+
+
 def get_local_port_offset():
     raw = os.environ.get("CC_PROXY_LOCAL_PORT_OFFSET", "").strip()
     if raw:

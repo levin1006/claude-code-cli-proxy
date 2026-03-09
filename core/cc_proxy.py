@@ -117,6 +117,12 @@ def main():
         stop_proxy(base_dir, provider)
         return 0
 
+    elif cmd == "version":
+        from proxy import get_binary_version
+        v = get_binary_version(base_dir)
+        print("[cc-proxy] core helper loaded. Binary status: {}".format(v))
+        return 0
+
     elif cmd == "ui":
         provider = args[1] if len(args) > 1 else None
         if provider and provider not in PROVIDERS:
