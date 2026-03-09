@@ -401,6 +401,16 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def stop_existing_proxies() -> None:
+    import subprocess
+    cc_proxy_py = INSTALL_DIR / "core" / "cc_proxy.py"
+    if cc_proxy_py.exists():
+        print("Stopping running proxies before update...")
+        try:
+            subprocess.run([sys.executable, str(cc_proxy_py), "stop"], check=False, capture_output=True)
+        except Exception:
+            pass
+
 def main() -> None:
     args = parse_args()
 
@@ -418,6 +428,8 @@ def main() -> None:
         print(f"Using repository ref: {args.tag}")
 
     print(f"Detected platform: {platform_key}")
+
+    stop_existing_proxies()
 
     install_core_files(source_mode, args.repo, args.tag, local_root)
     install_binary(source_mode, args.repo, args.tag, local_root, system, platform_key)

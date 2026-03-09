@@ -98,3 +98,11 @@ if ($localPath) {
 if (Test-Path $tempScript) {
     Remove-Item $tempScript -Force
 }
+
+# Auto-load into current session
+$proxyScript = "$env:USERPROFILE\.cli-proxy\shell\powershell\cc-proxy.ps1"
+if (Test-Path $proxyScript) {
+    Write-Host "`nAuto-loading CLIProxyAPI into the current PowerShell session..." -ForegroundColor Cyan
+    . $proxyScript
+    Write-Host "Done! You can now use cc, cc-proxy-start-all, etc." -ForegroundColor Green
+}

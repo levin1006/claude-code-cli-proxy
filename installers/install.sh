@@ -152,3 +152,11 @@ fi
 
 # Cleanup
 rm -f "$TEMP_SCRIPT"
+
+# Auto-load into current session
+PROXY_SCRIPT="$HOME/.cli-proxy/shell/bash/cc-proxy.sh"
+if [ -f "$PROXY_SCRIPT" ]; then
+    echo -e "\n\033[0;36mAuto-loading CLIProxyAPI into the current bash session...\033[0m"
+    source "$PROXY_SCRIPT"
+    echo -e "\033[0;32mDone! You can now use cc, cc-proxy-start-all, etc.\033[0m"
+fi
