@@ -28,12 +28,29 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 - `docs/claude-code-cliproxy-linux-guide.md` (Linux 운영 가이드)
 - `config.yaml` (루트 샘플/운영용 기본 설정)
 
+## 개발 반영 설치 (로컬 소스 동기화)
+
+> 권장 개발 플로우: 이곳 저장소(`claude-code-cli-proxy`) 폴더에서 코드를 수정한 뒤, 아래 명령어로 `~/.cli-proxy` 실행 환경에 동기화(복사 및 덮어쓰기)합니다.
+> **로컬 동기화 시에는 불필요한 쉘 래퍼를 우회하여 아래처럼 Python 코어 스크립트(`install.py`)를 직접 실행하는 것을 공식 방법으로 권장합니다.**
+
+### Windows (repo root에서)
+
+```powershell
+python installers\install.py --source local
+```
+
+### Linux / macOS (repo root에서)
+
+```bash
+python3 installers/install.py --source local
+```
+
+---
+
 ## 배포용 설치 (one-liner, `~/.cli-proxy`에 설치)
 
-이 섹션은 **배포/최종 사용자 설치용**입니다. 저장소를 클론할 필요 없이 터미널에 명령어 한 줄을 복사하여 붙여넣으면 설치가 완료되며, `~/.cli-proxy` 디렉토리에 필요한 모든 파일과 바이너리가 구성됩니다.
+이 섹션은 **배포/최종 사용자 설치용**입니다. 저장소를 클론할 필요 없이 터미널에 명령어 한 줄을 복사하여 붙여넣으면 GitHub에서 최신 코드를 다운받아 `~/.cli-proxy` 타겟 디렉토리에 설치를 완료합니다.
 설치 과정에서 알아서 쉘 프로필(`$PROFILE`, `~/.bashrc`, `~/.zshrc`)을 찾아 래퍼 스크립트를 로드하는 구문을 자동 등록해 주므로, 설치가 끝나면 터미널 창을 껐다 켜기만 하면 바로 사용할 수 있습니다.
-
-> 호환성 정책: 기존 루트 one-liner URL(`.../install.sh`, `.../install.ps1`)은 더 이상 지원하지 않습니다. 반드시 `.../installers/install.sh`, `.../installers/install.ps1` 경로를 사용하세요.
 
 ### Windows (PowerShell)
 
@@ -66,44 +83,7 @@ curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.Y.Z/installers/install.sh | bash -s -- --remote
 ```
-
 ---
-
-## 개발 반영 설치 (로컬 소스 동기화)
-
-> 권장 개발 플로우: 이곳 저장소(`claude-code-cli-proxy`) 폴더에서 코드를 수정한 뒤, 아래 명령어로 `~/.cli-proxy` 실행 환경에 동기화(덮어쓰기)합니다.
-> **로컬 동기화 시에는 쉘 래퍼를 우회하여 아래처럼 Python 코어 스크립트(`install.py`)를 직접 실행하는 것을 공식 방법으로 권장합니다.**
-
-### Windows (repo root에서)
-
-```powershell
-python installers\install.py --source local
-```
-> 참고: `.\installers\install.ps1 --source local` 로도 동일하게 동작합니다.
-
-### Linux / macOS (repo root에서)
-
-```bash
-python3 installers/install.py --source local
-```
-
----
-
-## `~/.cli-proxy` 수동 로드 (선택)
-
-> 기본적으로 설치 과정에서 쉘 프로필에 자동 등록되므로 아래 과정은 첫 설치 직후 터미널을 재시작하지 않고 현재 창에서 바로 사용하고 싶을 때만 1회 입력합니다.
-
-### Windows (PowerShell)
-
-```powershell
-. "~\.cli-proxy\shell\powershell\cc-proxy.ps1"
-```
-
-### Linux / macOS (Bash)
-
-```bash
-source ~/.cli-proxy/shell/bash/cc-proxy.sh
-```
 
 ### 실행 명령 (양 플랫폼 공통)
 
