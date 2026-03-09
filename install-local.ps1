@@ -1,9 +1,9 @@
-# deploy.ps1 — Local Deployment Script
+# install-local.ps1 — Local Installation Script
 # Copies the current LOCAL repo code into ~/.cli-proxy/
-# Usage: .\deploy.ps1
+# Usage: .\install-local.ps1
 #
 # NOTE: This is NOT the remote installer.
-#       For fresh install from GitHub, use: .\installers\install.ps1
+#       For fresh install from GitHub, use: .\install-remote.ps1
 
 function Get-CCProxyPython {
   if (Get-Command py -ErrorAction SilentlyContinue) { return "py" }

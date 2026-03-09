@@ -1,9 +1,9 @@
-# installers/install.ps1 — Remote Bootstrap Installer
+# install-remote.ps1 — Remote Bootstrap Installer
 # Downloads code from GitHub and installs to ~/.cli-proxy/
-# Usage (from anywhere): irm https://raw.githubusercontent.com/.../install.ps1 | iex
+# Usage (from anywhere): irm https://raw.githubusercontent.com/.../install-remote.ps1 | iex
 #
 # WARNING: This downloads from the REMOTE main branch.
-#          For local development deployment, use: .\deploy.ps1
+#          For local installation, use: .\install-local.ps1
 $ErrorActionPreference = 'Stop'
 
 # Set TLS version to 1.2
