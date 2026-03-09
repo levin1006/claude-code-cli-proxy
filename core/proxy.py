@@ -330,7 +330,7 @@ def render_dashboard_html():
 <body>
   <header>
     <h1>CC Proxy management dashboards</h1>
-    <p>Generated at {generated_at}. Provider panels: antigravity, claude, codex, gemini.</p>
+    <p>Generated at {generated_at}. Provider panels: antigravity, claude, openai, gemini.</p>
   </header>
   <main>
 {panels}

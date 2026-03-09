@@ -7,12 +7,12 @@ import sys
 
 IS_WINDOWS = sys.platform == "win32"
 
-PROVIDERS = ("codex", "claude", "antigravity", "gemini")
+PROVIDERS = ("openai", "claude", "antigravity", "gemini")
 
 PORTS = {
     "antigravity": 18417,
     "claude":      18418,
-    "codex":       18419,
+    "openai":       18419,
     "gemini":      18420,
 }
 
@@ -22,14 +22,14 @@ PRESETS = {
     "ag-claude": ("antigravity",  "claude-opus-4-6-thinking",  "claude-sonnet-4-6",       "claude-sonnet-4-6"),
     "ag-gemini": ("antigravity",  "gemini-3.1-pro-high",       "gemini-3.1-pro-low",      "gemini-3-flash"),
     "claude":    ("claude",       "claude-opus-4-6",           "claude-sonnet-4-6",       "claude-haiku-4-5-20251001"),
-    "codex":     ("codex",        "gpt-5.3-codex(xhigh)",      "gpt-5.3-codex(high)",     "gpt-5.3-codex-spark"),
+    "openai":    ("openai",       "gpt-5.4",                   "gpt-5.4",                 "gpt-5.3-codex-spark"),
     "gemini":    ("gemini",       "gemini-3-pro-preview",      "gemini-3-flash-preview",  "gemini-2.5-flash-lite"),
 }
 
 LOGIN_FLAGS = {
     "antigravity": "-antigravity-login",
     "claude":      "-claude-login",
-    "codex":       "-codex-login",
+    "openai":       "-codex-login",
     "gemini":      "-login",
 }
 
@@ -57,7 +57,7 @@ _PROVIDER_BRAND_COLORS = {
     # (truecolor_rgb, fallback_256)
     "antigravity": ((152, 190, 220), "\033[38;5;110m"),  # pastel cyan-blue
     "claude":      ((233, 168, 142), "\033[38;5;216m"),  # pastel orange
-    "codex":       ((137, 197, 175), "\033[38;5;114m"),  # pastel mint
+    "openai":      ((137, 197, 175), "\033[38;5;114m"),  # pastel mint
     "gemini":      ((176, 157, 236), "\033[38;5;147m"),  # pastel violet
 }
 

@@ -13,7 +13,10 @@ remote-management:
   allow-remote: false
 # Management key. If a plaintext value is provided here, it will be hashed on startup.
 # All management requests (even from localhost) require this key.
-# Leave empty to disable the Management API entirely (404 for all /v0/management routes).
+# Leave empty to disable the Management API entirely (404# Provider 3: OpenAI (via Codex bridge API but named openai)
+openai:
+  listen-port: 18419
+  auth-dir: ""
   secret-key: "cc"
 # Disable the bundled management control panel asset download and HTTP route when true.
   disable-control-panel: false
