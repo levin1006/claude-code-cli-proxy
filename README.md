@@ -31,7 +31,7 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 ## 배포용 설치 (one-liner, `~/.cli-proxy`에 설치)
 
 이 섹션은 **배포/최종 사용자 설치용**입니다. 저장소를 클론할 필요 없이 터미널에 명령어 한 줄을 복사하여 붙여넣으면 설치가 완료되며, `~/.cli-proxy` 디렉토리에 필요한 모든 파일과 바이너리가 구성됩니다.
-개발 반영은 아래 **"개발 반영 설치 (로컬 소스 동기화)"** 섹션을 사용하세요.
+설치 과정에서 알아서 쉘 프로필(`$PROFILE`, `~/.bashrc`, `~/.zshrc`)을 찾아 래퍼 스크립트를 로드하는 구문을 자동 등록해 주므로, 설치가 끝나면 터미널 창을 껐다 켜기만 하면 바로 사용할 수 있습니다.
 
 > 호환성 정책: 기존 루트 one-liner URL(`.../install.sh`, `.../install.ps1`)은 더 이상 지원하지 않습니다. 반드시 `.../installers/install.sh`, `.../installers/install.ps1` 경로를 사용하세요.
 
@@ -48,10 +48,6 @@ irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/insta
 ```powershell
 irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.Y.Z/installers/install.ps1 | iex
 ```
-
-> 참고: `main` URL에 `--tag`를 전달하는 방식도 동작하지만, 설치기 스크립트 자체는 `main` 기준입니다. 완전 고정이 필요하면 URL 자체를 태그로 고정하세요.
-
-설치 후 안내되는 명령어(`Install-CCProxyProfile`)를 실행하면 `$PROFILE`에 자동 등록되어 다음 세션부터 바로 사용할 수 있습니다.
 
 ### Linux / macOS (Bash)
 
@@ -71,19 +67,19 @@ curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.
 curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.Y.Z/installers/install.sh | bash -s -- --remote
 ```
 
-> `--remote`는 `CC_PROXY_LOCAL_PORT_OFFSET=10000`을 현재 세션 + 쉘 프로필(`~/.bashrc`, `~/.zshrc`)에 설정합니다.
-> 직접 값을 지정하려면 `--port-offset <number>`를 사용할 수 있습니다.
->
-> 참고: `main` URL에 `--tag`를 전달하는 방식도 동작하지만, 설치기 스크립트 자체는 `main` 기준입니다. 완전 고정이 필요하면 URL 자체를 태그로 고정하세요.
-
-설치 시 `~/.bashrc` 및 `~/.zshrc`에 자동으로 `source` 구문이 추가되므로, 터미널을 재시작하거나 `source ~/.cli-proxy/shell/bash/cc-proxy.sh`를 실행하면 즉시 적용됩니다.
-
 ---
 
 ## 개발 반영 설치 (로컬 소스 동기화)
 
-> 권장 개발 플로우: 저장소에서 코드만 수정하고, 실행은 항상 `~/.cli-proxy`에서 수행합니다.
-> 로컬 변경 반영은 installer의 local source 모드(`--source local`)로 동기화합니다.
+> 권장 개발 플로우: 이곳 저장소(`claude-code-cli-proxy`) 폴더에서 코드를 수정한 뒤, 아래 명령어로 `~/.cli-proxy` 실행 환경에 동기화(덮어쓰기)합니다.
+> **로컬 동기화 시에는 쉘 래퍼를 우회하여 아래처럼 Python 코어 스크립트(`install.py`)를 직접 실행하는 것을 공식 방법으로 권장합니다.**
+
+### Windows (repo root에서)
+
+```powershell
+python installers\install.py --source local
+```
+> 참고: `.\installers\install.ps1 --source local` 로도 동일하게 동작합니다.
 
 ### Linux / macOS (repo root에서)
 
@@ -91,67 +87,23 @@ curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.
 python3 installers/install.py --source local
 ```
 
-`install.sh` 경유로도 가능합니다(로컬 파일 동기화):
-
-```bash
-bash installers/install.sh --source local --local-path "$(pwd)"
-```
-
-### Windows (repo root에서)
-
-```powershell
-python installers/install.py --source local
-```
-
-`install.ps1`를 통해 동일 모드 사용도 가능합니다:
-
-```powershell
-.\installers\install.ps1 --source local
-```
-
 ---
 
 ## `~/.cli-proxy` 수동 로드 (선택)
 
-> 실행은 `~/.cli-proxy` 경로에서만 수행하는 것을 권장합니다.
+> 기본적으로 설치 과정에서 쉘 프로필에 자동 등록되므로 아래 과정은 첫 설치 직후 터미널을 재시작하지 않고 현재 창에서 바로 사용하고 싶을 때만 1회 입력합니다.
 
 ### Windows (PowerShell)
-
-#### 1) 1회 로드
 
 ```powershell
 . "~\.cli-proxy\shell\powershell\cc-proxy.ps1"
 ```
 
-최초 실행 시 프로필 등록 여부를 Y/N으로 묻습니다.
-
-#### 2) 프로필 등록(자동 로드)
-
-수동으로 실행하려면:
-
-```powershell
-Install-CCProxyProfile
-```
-
-등록 후 현재 세션에도 즉시 반영됩니다.
-
 ### Linux / macOS (Bash)
-
-#### 1) 1회 로드
 
 ```bash
 source ~/.cli-proxy/shell/bash/cc-proxy.sh
 ```
-
-처음 source 시 프로필 등록 여부를 Y/N으로 묻습니다.
-
-#### 2) 프로필 등록(자동 로드)
-
-```bash
-cc_proxy_install_profile
-```
-
-`~/.bashrc` 및 `~/.zshrc`(존재 시)에 source 라인을 추가합니다.
 
 ### 실행 명령 (양 플랫폼 공통)
 
