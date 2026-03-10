@@ -398,7 +398,95 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Local repo root for --source local/auto. If omitted, infer from installers/install.py location.",
     )
+    parser.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="Remove ~/.cli-proxy/, shims, and profile loader lines",
+    )
     return parser.parse_args()
+
+
+def uninstall() -> None:
+    import platform
+    import subprocess
+
+    system = platform.system().lower()
+
+    # 1. Stop running proxies
+    cc_proxy_py = INSTALL_DIR / "core" / "cc_proxy.py"
+    if cc_proxy_py.exists():
+        print("Stopping running proxies...")
+        try:
+            subprocess.run([sys.executable, str(cc_proxy_py), "stop"], check=False, capture_output=True)
+        except Exception:
+            pass
+
+    # 2. Remove shims from ~/.local/bin (Linux)
+    if system != "windows":
+        local_bin = Path.home() / ".local" / "bin"
+        for shim_name, _ in SHIM_COMMANDS:
+            shim_path = local_bin / shim_name
+            if shim_path.exists():
+                shim_path.unlink()
+                print(f"Removed shim: {shim_path}")
+
+    # 3. Strip loader lines from shell profiles
+    if system == "windows":
+        profile_line = f'. "{INSTALL_DIR}\\shell\\powershell\\cc-proxy.ps1"'
+        try:
+            res = subprocess.run(
+                ["powershell", "-Command", "echo $PROFILE"],
+                capture_output=True, text=True
+            )
+            profile_path = Path(res.stdout.strip())
+            if profile_path.exists():
+                content = profile_path.read_text(encoding="utf-8", errors="replace")
+                new_content = "\n".join(
+                    line for line in content.splitlines()
+                    if profile_line not in line
+                ).strip() + "\n"
+                if new_content != content:
+                    profile_path.write_text(new_content, encoding="utf-8")
+                    print(f"Removed loader line from {profile_path}")
+        except Exception as e:
+            print(f"Warning: could not clean PowerShell profile: {e}")
+    else:
+        src_line = f'source "{INSTALL_DIR}/shell/bash/cc-proxy.sh"'
+        for rc_name in (".bashrc", ".zshrc"):
+            rc_path = Path.home() / rc_name
+            if not rc_path.exists():
+                continue
+            content = rc_path.read_text(encoding="utf-8", errors="replace")
+            new_lines = []
+            skip_next_blank = False
+            for line in content.splitlines():
+                if src_line in line or "Added by cli-proxy installer" in line:
+                    skip_next_blank = True
+                    continue
+                if skip_next_blank and line.strip() == "":
+                    skip_next_blank = False
+                    continue
+                skip_next_blank = False
+                new_lines.append(line)
+            new_content = "\n".join(new_lines).strip() + "\n"
+            if new_content != content:
+                rc_path.write_text(new_content, encoding="utf-8")
+                print(f"Removed loader line from ~/{rc_name}")
+
+    # 4. Remove ~/.cli-proxy/ directory
+    if INSTALL_DIR.exists():
+        print(f"Removing {INSTALL_DIR} ...")
+        shutil.rmtree(INSTALL_DIR)
+        print("Removed.")
+    else:
+        print(f"{INSTALL_DIR} not found — nothing to remove.")
+
+    print("\nUninstall complete.")
+    if system == "windows":
+        print("Restart your PowerShell terminal to clean up lingering aliases.")
+    else:
+        print("Run 'exec $SHELL' or open a new terminal to clean up lingering aliases.")
+
 
 
 def stop_existing_proxies() -> None:
@@ -423,6 +511,10 @@ def start_proxies_after_install() -> None:
 
 def main() -> None:
     args = parse_args()
+
+    if args.uninstall:
+        uninstall()
+        return
 
     print("Starting cli-proxy-api installation...")
     check_python_version()

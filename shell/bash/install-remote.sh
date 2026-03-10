@@ -42,35 +42,40 @@ REQUESTED_TAG="${CC_PROXY_INSTALL_TAG:-main}"
 PORT_OFFSET=""
 SOURCE_MODE=""
 LOCAL_PATH=""
+DO_UNINSTALL=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --tag)       REQUESTED_TAG="$2"; shift 2 ;;
-        --repo)      REPO="$2"; shift 2 ;;
-        --source)    SOURCE_MODE="$2"; shift 2 ;;
-        --local-path) LOCAL_PATH="$2"; shift 2 ;;
+        --tag)         REQUESTED_TAG="$2"; shift 2 ;;
+        --repo)        REPO="$2"; shift 2 ;;
+        --source)      SOURCE_MODE="$2"; shift 2 ;;
+        --local-path)  LOCAL_PATH="$2"; shift 2 ;;
         --port-offset) PORT_OFFSET="$2"; shift 2 ;;
+        --uninstall)   DO_UNINSTALL=true; shift ;;
         *) echo "Error: unknown argument '$1'"; exit 1 ;;
     esac
 done
 
-[[ -z "$SOURCE_MODE" ]] && SOURCE_MODE="remote"
-
 INSTALLER_URL="https://raw.githubusercontent.com/${REPO}/${REQUESTED_TAG}/installers/install.py"
 TEMP_SCRIPT="/tmp/install_cc_proxy.py"
 
-echo "Using repository ref: $REQUESTED_TAG"
 echo "Downloading core installation script..."
 curl -fsSL "$INSTALLER_URL" -o "$TEMP_SCRIPT"
 
-PY_ARGS=(--repo "$REPO" --tag "$REQUESTED_TAG" --source "$SOURCE_MODE")
-[[ -n "$LOCAL_PATH" ]] && PY_ARGS+=(--local-path "$LOCAL_PATH")
-python3 "$TEMP_SCRIPT" "${PY_ARGS[@]}"
+if [ "$DO_UNINSTALL" = true ]; then
+    python3 "$TEMP_SCRIPT" --uninstall
+else
+    [[ -z "$SOURCE_MODE" ]] && SOURCE_MODE="remote"
+    echo "Using repository ref: $REQUESTED_TAG"
+    PY_ARGS=(--repo "$REPO" --tag "$REQUESTED_TAG" --source "$SOURCE_MODE")
+    [[ -n "$LOCAL_PATH" ]] && PY_ARGS+=(--local-path "$LOCAL_PATH")
+    python3 "$TEMP_SCRIPT" "${PY_ARGS[@]}"
+fi
 
 rm -f "$TEMP_SCRIPT"
 
 PROXY_SCRIPT="$HOME/.cli-proxy/shell/bash/cc-proxy.sh"
-if [ -f "$PROXY_SCRIPT" ]; then
+if [ -f "$PROXY_SCRIPT" ] && [ "$DO_UNINSTALL" = false ]; then
     echo ""
     echo -e "\033[0;32mInstallation complete!\033[0m"
     echo ""

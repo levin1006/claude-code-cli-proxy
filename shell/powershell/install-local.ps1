@@ -27,9 +27,14 @@ $pythonPath = Get-CCProxyPython
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $installScript = Join-Path $repoRoot "installers\install.py"
 
-Write-Host "[install-local] Local installation: repo -> ~/.cli-proxy/" -ForegroundColor Cyan
-Write-Host "[install-local] Using Python: $pythonPath" -ForegroundColor DarkGray
-& $pythonPath $installScript --source local
+if ($args -contains "--uninstall") {
+    Write-Host "[install-local] Uninstalling cli-proxy..." -ForegroundColor Yellow
+    & $pythonPath $installScript --uninstall
+} else {
+    Write-Host "[install-local] Local installation: repo -> ~/.cli-proxy/" -ForegroundColor Cyan
+    Write-Host "[install-local] Using Python: $pythonPath" -ForegroundColor DarkGray
+    & $pythonPath $installScript --source local
+}
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[install-local] Failed." -ForegroundColor Red
