@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to OpenAI (OpenAI.ai/code) when working with code in this repository.
 
 ## Repository overview
 - This repo is an **operations/config workspace** for a prebuilt CLIProxyAPI binary, not the source code of the proxy itself.
@@ -15,7 +15,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
   - `core/cc_proxy.py` (cross-platform core logic — single source of truth)
   - `shell/powershell/cc-proxy.ps1` (Windows thin wrapper, ~50 lines, delegates to Python core)
   - `shell/bash/cc-proxy.sh` (Linux thin wrapper, ~50 lines, delegates to Python core)
-  - `docs/Codex-cliproxy-guide.md` (Operational background and guide)
+  - `docs/OpenAI-cliproxy-guide.md` (Operational background and guide)
   - `config.yaml` at repo root (bootstrap config used when issuing new auth tokens near the binary)
 - References:
   - Official repository: https://github.com/router-for-me/CLIProxyAPI
@@ -37,10 +37,10 @@ Shell wrappers (thin)             Python core (shared)
 ```
 
 1. Shell wrappers (`cc-<provider>` functions) call `python3 core/cc_proxy.py run <preset> -- [args]`.
-2. `core/cc_proxy.py` contains ALL logic: token validation, proxy start/stop, health check, Codex invocation.
+2. `core/cc_proxy.py` contains ALL logic: token validation, proxy start/stop, health check, OpenAI invocation.
 3. Provider isolation is done by working directory + `auth-dir: "./"` in each provider config, so each instance only sees credentials in its own folder.
 4. Startup rewrites provider base `config.yaml` with provider-specific port and launches the binary with `-config <base-config-file>`.
-5. `core/cc_proxy.py run` sets env vars for the Codex child process directly (no shell env modification needed):
+5. `core/cc_proxy.py run` sets env vars for the OpenAI child process directly (no shell env modification needed):
    - `ANTHROPIC_BASE_URL`
    - `ANTHROPIC_AUTH_TOKEN=sk-dummy`
    - `ANTHROPIC_DEFAULT_OPUS_MODEL`
@@ -65,8 +65,8 @@ Shell wrappers (thin)             Python core (shared)
 ### Port model in this repo
 Defined in `core/cc_proxy.py` (single source of truth, synced to both shell wrappers):
 - `antigravity`: `18417`
-- `Codex`: `18418`
-- `codex`: `18419`
+- `OpenAI`: `18418`
+- `openai`: `18419`
 - `gemini`: `18420`
 
 ## Common commands
@@ -105,18 +105,18 @@ cc_proxy_install_profile
 `cc_proxy_install_profile` adds a source line to `~/.bashrc` and `~/.zshrc` (if they exist).
 New terminal sessions will auto-load helpers.
 
-### Run Codex (both platforms)
+### Run OpenAI (both platforms)
 ```
 cc
 ```
-Runs native Codex (proxy env vars removed).
+Runs native OpenAI (proxy env vars removed).
 
-### Run Codex via provider-specific proxy (both platforms)
+### Run OpenAI via provider-specific proxy (both platforms)
 ```
-cc-Codex
+cc-OpenAI
 cc-gemini
-cc-codex
-cc-ag-Codex
+cc-openai
+cc-ag-OpenAI
 cc-ag-gemini
 ```
 
@@ -170,7 +170,7 @@ http://127.0.0.1:<provider-port>/management.html
 - Confirm install metadata source before runtime verification:
   - `cat ~/.cli-proxy/.install-meta.json` (or PowerShell equivalent)
 
-## Editing guidance for future Codex instances
+## Editing guidance for future OpenAI instances
 - **To change model names or ports**: edit `core/cc_proxy.py` ONLY — single source of truth. Shell wrappers delegate automatically.
 - Prefer editing `core/cc_proxy.py` for all logic changes. Shell wrappers (`shell/bash/cc-proxy.sh`, `shell/powershell/cc-proxy.ps1`) are thin and rarely need editing.
 - Treat `configs/*/.config.runtime.yaml` as generated artifacts and keep them untracked.

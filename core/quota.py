@@ -134,6 +134,7 @@ _QUOTA_FETCHERS = {
     "antigravity": _fetch_quota_antigravity,
     "claude":      _fetch_quota_claude,
     "codex":       _fetch_quota_codex,
+    "openai":      _fetch_quota_codex,
 }
 
 

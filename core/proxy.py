@@ -330,7 +330,7 @@ def render_dashboard_html():
 <body>
   <header>
     <h1>CC Proxy management dashboards</h1>
-    <p>Generated at {generated_at}. Provider panels: antigravity, claude, codex, gemini.</p>
+    <p>Generated at {generated_at}. Provider panels: antigravity, claude, openai, gemini.</p>
   </header>
   <main>
 {panels}
@@ -441,9 +441,7 @@ def start_proxy(base_dir, provider, quiet=False):
 
     wd = get_provider_dir(base_dir, provider)
     if not wd.is_dir():
-        if not quiet:
-            print("[cc-proxy] Provider config directory not found: {}".format(wd), file=sys.stderr)
-        return False
+        wd.mkdir(parents=True, exist_ok=True)
 
     config_path = get_config_file(base_dir, provider)
     if not config_path.exists():

@@ -49,6 +49,8 @@ def get_provider_dir(base_dir, provider):
 def _token_prefixes_for_provider(provider):
     if provider == "antigravity":
         return ["antigravity", "ag"]
+    if provider == "openai":
+        return ["openai", "codex"]
     return [provider]
 
 

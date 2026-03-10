@@ -61,9 +61,9 @@ cc-proxy-status <provider>   # 특정 provider만 (기존 동작 유지)
 ║       7d opus       ██░░░░░░░░  20%  resets 6d14h            ║
 ║                                                              ║
 ╠══════════════════════════════════════════════════════════════╣
-║   codex  :18419   ● running  1 accounts                      ║
+║   openai  :18419   ● running  1 accounts                      ║
 ║                                                              ║
-║   Quota  ── codex ────────────────────────────────────────── ║
+║   Quota  ── openai ────────────────────────────────────────── ║
 ║     kimdh1st@gmail.com  [pro]                                ║
 ║       5h window     ██████████ 100%  resets 4h58m            ║
 ║       7d window     █████████░  99%  resets 5d22h            ║
@@ -71,7 +71,7 @@ cc-proxy-status <provider>   # 특정 provider만 (기존 동작 유지)
 ```
 
 **Quota 진행바 규칙:**
-- `remainingFraction` (antigravity/gemini) 또는 `100 - used_percent` (claude/codex)
+- `remainingFraction` (antigravity/gemini) 또는 `100 - used_percent` (claude/openai)
 - ≥ 80% (충분): 기본색
 - 40–79%: yellow (`\033[33m`)
 - < 40% (부족): red (`\033[31m`)
@@ -88,7 +88,7 @@ cc-proxy-status <provider>   # 특정 provider만 (기존 동작 유지)
 |----------|---------|--------|----------|
 | antigravity | `https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels` | POST `{"project":"$PROJECT$"}` | `models[id].quotaInfo.{remainingFraction,resetTime}` |
 | claude | `https://api.anthropic.com/api/oauth/usage` | GET | `five_hour/seven_day/seven_day_opus.{utilization,resets_at}` |
-| codex | `https://chatgpt.com/backend-api/wham/usage` | GET | `rate_limit.primary_window/secondary_window.{used_percent,reset_after_seconds}` |
+| openai | `https://chatgpt.com/backend-api/wham/usage` | GET | `rate_limit.primary_window/secondary_window.{used_percent,reset_after_seconds}` |
 | gemini | `https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota` | POST `{"project":"$PROJECT$"}` | `buckets[].{modelId,remainingFraction,resetTime}` — 이번 스코프 skip (project_id 파싱 필요) |
 
 > **`$PROJECT$`**: 관리서버가 `auth_index`로 해당 계정 파일을 찾아 project_id를 주입한다
@@ -126,7 +126,7 @@ def _fetch_quota_antigravity(provider, secret, auth_index):
 def _fetch_quota_claude(provider, secret, auth_index):
     """oauth/usage → {window_name: {remaining_pct, reset_str}}"""
 
-def _fetch_quota_codex(provider, secret, auth_index):
+def _fetch_quota_openai(provider, secret, auth_index):
     """/wham/usage → {window_name: {remaining_pct, reset_str}}"""
 
 def _fmt_quota_bar(remaining_pct):

@@ -1,0 +1,10 @@
+- [x] opus 급 모델을 gpt-5.4(xhigh), sonnet 급 모델을 gpt-5.4(high)로 변경
+  - *완료 코멘트: `core/constants.py`의 `PRESETS` 부분에 `openai`의 모델 대응을 `gpt-5.4(xhigh)`와 `gpt-5.4(high)`로 각각 수정 완료했습니다.*
+- [x] cc-proxy-ui 주기적으로 자동 refresh
+  - *완료 코멘트: `core/tui.py` 메인 루프에서 터미널 응답성을 해치지 않도록 키 입력 대기 중 주기적으로 백그라운드 새로고침(`_refresh_current`)이 트리거되도록 수정 완료했습니다.*
+- [x] config.yaml 정리: 불필요한 oauth-model-alias, payload.override 제거
+  - *완료 코멘트: CLIProxyAPI가 `(xhigh)` 접미사를 네이티브로 파싱하여 `reasoning.effort`를 자동 주입하므로, 수동 설정이 불필요합니다. debug/force-model-prefix도 원래 값으로 복원.*
+- [x] cc-proxy-ui 토큰 표시 개선: input/output/reasoning 분리 표시
+  - *완료 코멘트: `core/display.py`의 Models 섹션과 Per-account 섹션에서 total_tokens 대신 input/output/reasoning을 각각 분리하여 표시하도록 수정.*
+- [x] cc-proxy-ui quota 미표시 버그 수정
+  - *완료 코멘트: `core/quota.py`의 `_QUOTA_FETCHERS`에 `"openai"` 키 추가. provider 이름이 `codex` → `openai`로 변경되었으나 매핑이 미갱신되어 quota를 가져오지 못하던 버그 수정.*

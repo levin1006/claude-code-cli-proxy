@@ -1,7 +1,7 @@
 # Claude Code + CLIProxyAPI 통합 멀티-프로바이더 운영 가이드
 
 > **지원 환경**: Windows (PowerShell) / Linux (Bash)
-> **공통 목표**: Claude Code에서 OpenAI Codex, Google Gemini, Antigravity, Anthropic Claude 등 다양한 모델을 **로컬 프록시(CLIProxyAPI)** 를 경유하여 사용합니다. Provider별로 **자격증명(토큰)을 분리**해 원치 않는 호출 혼입을 방지하고 분산 환경을 손쉽게 모니터링합니다.
+> **공통 목표**: Claude Code에서 OpenAI OpenAI, Google Gemini, Antigravity, Anthropic Claude 등 다양한 모델을 **로컬 프록시(CLIProxyAPI)** 를 경유하여 사용합니다. Provider별로 **자격증명(토큰)을 분리**해 원치 않는 호출 혼입을 방지하고 분산 환경을 손쉽게 모니터링합니다.
 
 ---
 
@@ -15,8 +15,8 @@
 | **Linux** | `shell/bash/cc-proxy.sh` | `source shell/bash/cc-proxy.sh` | `cc_proxy_install_profile` | `CLIProxyAPI/linux/<arch>/cli-proxy-api` |
 
 **핵심 원리 (공통)**:
-1. **Provider별 고정 포트**: (Antigravity: 18417, Claude: 18418, Codex: 18419, Gemini: 18420)
-2. **Provider 격리**: 토큰 파일명 prefix(`claude-*`, `gemini-*`, `codex-*`, `antigravity-*`)로 provider를 구분합니다.
+1. **Provider별 고정 포트**: (Antigravity: 18417, Claude: 18418, OpenAI: 18419, Gemini: 18420)
+2. **Provider 격리**: 토큰 파일명 prefix(`claude-*`, `gemini-*`, `openai-*`, `antigravity-*`)로 provider를 구분합니다.
 3. **토큰 디렉터리 일원화**: 기본 `configs/tokens`를 사용하며, `CC_PROXY_TOKEN_DIR`(환경변수) 또는 `cc-proxy-token-dir <path>`로 변경할 수 있습니다.
 4. **상태 관리**: 메모리가 아닌 `configs/<provider>/.proxy.pid` 파일로 추적해 쉘 세션과 무관하게 생명주기를 관리합니다.
 
@@ -48,7 +48,7 @@
 ### 2.2 디렉터리 및 토큰 구조 세팅
 
 기본 토큰 저장 위치는 `configs/tokens/` 입니다. 파일명 prefix로 provider를 구분합니다.
-(예: `claude-account1.json`, `gemini-work.json`, `codex-main.json`, `antigravity-team.json`)
+(예: `claude-account1.json`, `gemini-work.json`, `openai-main.json`, `antigravity-team.json`)
 
 ```text
 claude-code-cli-proxy/
@@ -60,13 +60,13 @@ claude-code-cli-proxy/
     tokens/
       claude-account1.json
       gemini-account1.json
-      codex-account1.json
+      openai-account1.json
       antigravity-account1.json
     claude/
       config.yaml
     gemini/
       config.yaml
-    codex/
+    openai/
       config.yaml
     antigravity/
       config.yaml
@@ -102,7 +102,7 @@ cc_proxy_install_profile
 cc                 # 순정 모드: 프록시 환경변수 제거 후 Claude Code 실행
 cc-ag-claude       # Antigravity (Claude 모델 계열 매핑)
 cc-claude          # Anthropic Claude
-cc-codex           # OpenAI Codex
+cc-openai           # OpenAI OpenAI
 cc-gemini          # Google Gemini
 cc-ag-gemini       # Antigravity (Gemini 모델 계열 매핑)
 ```
@@ -154,14 +154,14 @@ cc-proxy-token-delete claude claude-account1.json --yes  # 토큰 삭제
   antigravity-account2.json
   claude-work.json                   ← claude provider 토큰
   claude-personal.json
-  codex-main.json                    ← codex provider 토큰
+  openai-main.json                    ← openai provider 토큰
   gemini-team.json                   ← gemini provider 토큰
 ```
 
 **파일명 규칙** — `<provider>-<식별자>.json`
 - `antigravity-` 또는 `ag-`: Antigravity provider
 - `claude-`: Claude provider
-- `codex-`: Codex provider
+- `openai-`: OpenAI provider
 - `gemini-`: Gemini provider
 
 인증(`cc-proxy-auth`)으로 발급된 토큰은 자동으로 이 규칙에 맞는 이름으로 저장됩니다.
@@ -288,7 +288,7 @@ cp ~/.cli-proxy/configs/tokens/*.json ~/new-token-dir/
 ## 6. FAQ 및 트러블슈팅
 
 ### Q1. Provider 간 모델 요청이 섞입니다.
-A1. cc-proxy는 파일명 prefix로 provider를 구분합니다. 토큰 파일명이 `claude-`, `antigravity-`, `codex-`, `gemini-`로 시작하는지 확인하세요. `cc-proxy-token-list`로 현재 목록을 조회할 수 있습니다. 잘못된 이름의 파일이 있다면 삭제 후 `cc-proxy-auth <provider>`로 재발급받으세요.
+A1. cc-proxy는 파일명 prefix로 provider를 구분합니다. 토큰 파일명이 `claude-`, `antigravity-`, `openai-`, `gemini-`로 시작하는지 확인하세요. `cc-proxy-token-list`로 현재 목록을 조회할 수 있습니다. 잘못된 이름의 파일이 있다면 삭제 후 `cc-proxy-auth <provider>`로 재발급받으세요.
 
 ### Q2. cc-claude 등을 실행했는데 `curl` 오류가 발생하거나 헬스체크를 통과 못합니다. (Windows)
 A2. PowerShell 5.x의 `curl`이 기본 내장 `Invoke-WebRequest` 알리어스일 때 발생합니다. `curl.exe`가 설치되어 동작 가능한지 확인하세요. (최신 스크립트는 내부적으로 `curl.exe`를 우선 찾도록 개선되었습니다)

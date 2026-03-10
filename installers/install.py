@@ -411,6 +411,16 @@ def stop_existing_proxies() -> None:
         except Exception:
             pass
 
+def start_proxies_after_install() -> None:
+    import subprocess
+    cc_proxy_py = INSTALL_DIR / "core" / "cc_proxy.py"
+    if cc_proxy_py.exists():
+        print("Starting proxies...")
+        try:
+            subprocess.run([sys.executable, str(cc_proxy_py), "start", "all"], check=False)
+        except Exception:
+            pass
+
 def main() -> None:
     args = parse_args()
 
@@ -438,6 +448,7 @@ def main() -> None:
     write_install_metadata(args.repo, args.tag, platform_key, source_mode, local_root)
     setup_profile()
     print("\nInstallation complete!")
+    start_proxies_after_install()
 
 
 if __name__ == "__main__":
