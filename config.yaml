@@ -13,7 +13,13 @@ remote-management:
   allow-remote: false
 # Management key. If a plaintext value is provided here, it will be hashed on startup.
 # All management requests (even from localhost) require this key.
-# Leave empty to disable the Management API entirely (404 for all /v0/management routes).
+# Leave empty to disable the Management API entirely (404)
+  secret-key: "cc"
+
+# Provider 3: OpenAI (via Codex bridge API but named openai)
+codex:
+  listen-port: 18419
+  auth-dir: ""
   secret-key: "cc"
 # Disable the bundled management control panel asset download and HTTP route when true.
   disable-control-panel: false
@@ -206,7 +212,7 @@ nonstream-keepalive-interval: 0
 # Supported channels: gemini-cli, vertex, aistudio, antigravity, claude, codex, qwen, iflow, kimi.
 # NOTE: Aliases do not apply to gemini-api-key, codex-api-key, claude-api-key, openai-compatibility, vertex-api-key, or ampcode.
 # You can repeat the same name with different aliases to expose multiple client model names.
-# oauth-model-alias:
+oauth-model-alias:
 #   gemini-cli:
 #     - name: "gemini-2.5-pro"          # original model name under this channel
 #       alias: "g2.5p"                  # client-visible alias
@@ -224,8 +230,9 @@ nonstream-keepalive-interval: 0
 #     - name: "claude-sonnet-4-5-20250929"
 #       alias: "cs4.5"
 #   codex:
-#     - name: "gpt-5"
-#       alias: "g5"
+#     - name: "gpt-5.4(xhigh)"
+#       alias: "gpt-5.4-xhigh"
+#       fork: true
 #   qwen:
 #     - name: "qwen3-coder-plus"
 #       alias: "qwen-plus"
@@ -261,7 +268,7 @@ nonstream-keepalive-interval: 0
 #     - "kimi-k2-thinking"
 
 # Optional payload configuration
-# payload:
+payload:
 #   default: # Default rules only set parameters when they are missing in the payload.
 #     - models:
 #         - name: "gemini-2.5-pro" # Supports wildcards (e.g., "gemini-*")
@@ -274,12 +281,12 @@ nonstream-keepalive-interval: 0
 #           protocol: "gemini" # restricts the rule to a specific protocol, options: openai, gemini, claude, codex, antigravity
 #       params: # JSON path (gjson/sjson syntax) -> raw JSON value (strings are used as-is, must be valid JSON)
 #         "generationConfig.responseJsonSchema": "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}}}"
-#   override: # Override rules always set parameters, overwriting any existing values.
+#   override:
 #     - models:
-#         - name: "gpt-*" # Supports wildcards (e.g., "gpt-*")
-#           protocol: "codex" # restricts the rule to a specific protocol, options: openai, gemini, claude, codex, antigravity
-#       params: # JSON path (gjson/sjson syntax) -> value
-#         "reasoning.effort": "high"
+#         - name: "*-xhigh"
+#           protocol: "codex"
+#       params:
+#         "reasoning.effort": "xhigh"
 #   override-raw: # Override raw rules always set parameters using raw JSON (must be valid JSON).
 #     - models:
 #         - name: "gpt-*" # Supports wildcards (e.g., "gpt-*")

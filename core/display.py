@@ -263,7 +263,7 @@ def _dedupe_auth_files(auth_data, provider=None):
             "{}-".format(pfx) for pfx in _token_prefixes_for_provider(provider)
         )
         def _fname(f):
-            name = (f.get("name") or "").strip()
+            name = (f.get("name") or f.get("id") or "").strip()
             if name:
                 return name.split("/")[-1].split("\\")[-1]
             path = (f.get("path") or "").strip()
@@ -298,22 +298,36 @@ def _dedupe_auth_files(auth_data, provider=None):
 def _aggregate_per_account(usage_data):
     """Aggregate usage stats per account from /v0/management/usage response."""
     account_stats = {}
+    if not usage_data:
+        return account_stats
     for api_data in usage_data.get("usage", {}).get("apis", {}).values():
         for model_data in api_data.get("models", {}).values():
             for detail in model_data.get("details", []):
                 src = detail.get("source", "unknown")
-                tok = detail.get("tokens", {}).get("total_tokens", 0)
+                tokens = detail.get("tokens", {})
+                tok = tokens.get("total_tokens", 0)
                 ts  = detail.get("timestamp", "")
                 failed = detail.get("failed", False)
                 if src not in account_stats:
-                    account_stats[src] = {"requests": 0, "tokens": 0, "fails": 0, "last_time": "", "last_tok": 0}
+                    account_stats[src] = {
+                        "requests": 0, "tokens": 0, "fails": 0,
+                        "input": 0, "output": 0, "reasoning": 0,
+                        "last_time": "", "last_tok": 0,
+                        "last_input": 0, "last_output": 0, "last_reasoning": 0,
+                    }
                 account_stats[src]["requests"] += 1
                 account_stats[src]["tokens"] += tok
+                account_stats[src]["input"] += int(tokens.get("input_tokens", 0) or 0)
+                account_stats[src]["output"] += int(tokens.get("output_tokens", 0) or 0)
+                account_stats[src]["reasoning"] += int(tokens.get("reasoning_tokens", 0) or 0)
                 if failed:
                     account_stats[src]["fails"] += 1
                 if ts > account_stats[src]["last_time"]:
                     account_stats[src]["last_time"] = ts
                     account_stats[src]["last_tok"] = tok
+                    account_stats[src]["last_input"] = int(tokens.get("input_tokens", 0) or 0)
+                    account_stats[src]["last_output"] = int(tokens.get("output_tokens", 0) or 0)
+                    account_stats[src]["last_reasoning"] = int(tokens.get("reasoning_tokens", 0) or 0)
     return account_stats
 
 
@@ -359,7 +373,7 @@ def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=F
                 mpa = result["models_per_account"]
 
                 def _fetch_models(f, out, _pvd=provider, _sec=secret):
-                    name = f.get("name", "")
+                    name = f.get("name") or f.get("id") or ""
                     if not name:
                         return
                     try:
@@ -380,7 +394,7 @@ def _prefetch_provider_data(base_dir, provider, fetch_quota=False, fetch_check=F
                 qpa = result["quota_data"]
 
                 def _fetch_quota_one(f, out, _pvd=provider, _sec=secret, _fn=fetcher):
-                    name = f.get("name", "")
+                    name = f.get("name") or f.get("id") or ""
                     auth_index = f.get("auth_index", "")
                     if not name or not auth_index:
                         return
@@ -492,8 +506,8 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line(token_dir_line, W))
         print(_box_line(divider, W))
         for f in files:
-            email = f.get("email", f.get("name", "?"))
-            name = f.get("name", "")
+            email = f.get("email", f.get("name") or f.get("id", "?"))
+            name = f.get("name") or f.get("id", "")
             last_refresh = f.get("last_refresh", "")
             plan_type = (f.get("id_token") or {}).get("plan_type", "")
             time_str = _time_ago(last_refresh) if last_refresh else ""
@@ -530,10 +544,7 @@ def _print_status_dashboard(base_dir, provider, status, W,
             )
             print(_box_line(row, W))
 
-    if not has_usage:
-        print(_box_line("", W))
-        _BOX_EDGE_COLOR = prev_edge_color
-        return
+    pass
 
     # --- usage section ---
     total_req = u.get("total_requests", 0)
@@ -567,23 +578,48 @@ def _print_status_dashboard(base_dir, provider, status, W,
     for api_data in apis.values():
         for model_name, model_data in api_data.get("models", {}).items():
             details = model_data.get("details", [])
-            req_count = len(details)
-            tok_count = sum(d.get("tokens", {}).get("total_tokens", 0) for d in details)
             if model_name not in model_stats:
-                model_stats[model_name] = {"requests": 0, "tokens": 0}
-            model_stats[model_name]["requests"] += req_count
-            model_stats[model_name]["tokens"] += tok_count
+                model_stats[model_name] = {
+                    "requests": 0, "fails": 0,
+                    "input": 0, "output": 0, "reasoning": 0,
+                    "last_time": "",
+                    "last_input": 0, "last_output": 0, "last_reasoning": 0,
+                }
+            s = model_stats[model_name]
+            for d in details:
+                toks = d.get("tokens", {})
+                s["requests"] += 1
+                s["input"]    += int(toks.get("input_tokens",     0) or 0)
+                s["output"]   += int(toks.get("output_tokens",    0) or 0)
+                s["reasoning"] += int(toks.get("reasoning_tokens", 0) or 0)
+                if d.get("failed", False):
+                    s["fails"] += 1
+                ts = d.get("timestamp", "")
+                if ts > s["last_time"]:
+                    s["last_time"]      = ts
+                    s["last_input"]     = int(toks.get("input_tokens",     0) or 0)
+                    s["last_output"]    = int(toks.get("output_tokens",    0) or 0)
+                    s["last_reasoning"] = int(toks.get("reasoning_tokens", 0) or 0)
 
-    if model_stats:
-        print(_box_line("", W))
-        print(_box_line("  Models:", W))
-        for mname, mdata in sorted(model_stats.items(), key=lambda x: -x[1]["tokens"]):
-            row = "    {:<32}  {:>5} req  {:>8} tokens".format(
-                mname[:32], mdata["requests"], _fmt_tokens(mdata["tokens"])
-            )
-            print(_box_line(row, W))
+    _C_CYAN   = "\033[36m"
+    _C_YELLOW = "\033[33m"
+    _C_TEAL   = "\033[38;5;73m"   # muted blue-green for input
+    _C_PURPLE = "\033[38;5;139m" # muted purple for output
+    _DOT      = "  \u00b7  "
+    _DIM_DOT  = _C_DIM + _DOT + _C_RESET
 
-    # Daily stats
+    def _p(text, width):
+        return text + " " * max(0, width - _visible_len(text))
+
+    def _fmt_tok_compact(inp, out, rsn):
+        i_s = _C_TEAL   + _fmt_tokens(inp) + _C_RESET
+        o_s = _C_PURPLE + _fmt_tokens(out) + _C_RESET
+        r_val = _fmt_tokens(rsn) if rsn > 0 else "0"
+        _C_AMBER = "\033[38;5;136m"   # soft amber for reasoning
+        r_s = (_C_AMBER + r_val + _C_RESET) if rsn > 0 else (_C_DIM + r_val + _C_RESET)
+        return "i{}/o{}/r{}".format(i_s, o_s, r_s)
+
+    # Daily stats (shown before models)
     requests_by_day = u.get("requests_by_day", {})
     tokens_by_day = u.get("tokens_by_day", {})
     all_days = sorted(set(list(requests_by_day.keys()) + list(tokens_by_day.keys())))
@@ -593,42 +629,87 @@ def _print_status_dashboard(base_dir, provider, status, W,
         for day in all_days[-7:]:
             day_req = requests_by_day.get(day, 0)
             day_tok = tokens_by_day.get(day, 0)
-            row = "    {}  {:>6} req  {:>8} tokens".format(day, day_req, _fmt_tokens(day_tok))
+            tok_str = _C_TEAL + _fmt_tokens(day_tok) + _C_RESET + " tokens"
+            row = "    {}{}{}{}{}{}{}".format(
+                day, _DIM_DOT, "{:>3}".format(day_req), " req", _DIM_DOT, tok_str, ""
+            )
             print(_box_line(row, W))
+
+    if model_stats:
+        print(_box_line("", W))
+        print(_box_line("  Models:", W))
+
+        W_MODEL = 24
+        W_MREQ  = 5
+        W_MTOK  = 19
+        W_MLAST = 19
+
+        h_model = _p(_C_BOLD + "model" + _C_RESET, W_MODEL)
+        h_mreq  = _p(_C_BOLD + "req" + _C_RESET, W_MREQ)
+        h_mtok  = _p(_C_BOLD + "total token" + _C_RESET, W_MTOK)
+        h_mlast = _p(_C_BOLD + "last token" + _C_RESET, W_MLAST)
+        h_mtime = _C_BOLD + "last req." + _C_RESET
+        mheader = "    " + h_model + _DIM_DOT + h_mreq + _DIM_DOT + h_mtok + _DIM_DOT + h_mlast + _DIM_DOT + h_mtime
+        print(_box_line(mheader, W))
+        print(_box_line(divider, W))
+
+        for mname, mdata in sorted(model_stats.items(), key=lambda x: -(x[1]["input"] + x[1]["output"] + x[1]["reasoning"])):
+            fails     = mdata["fails"]
+            total     = mdata["requests"]
+            req_color = _C_RED if fails > 0 else _C_GREEN
+            req_str   = req_color + str(total) + _C_RESET
+            tok_str   = _fmt_tok_compact(mdata["input"],      mdata["output"],      mdata["reasoning"])
+            last_str  = _fmt_tok_compact(mdata["last_input"], mdata["last_output"], mdata["last_reasoning"])
+            dt_str    = _C_DIM + (_fmt_local_dt(mdata["last_time"]) if mdata["last_time"] else "") + _C_RESET
+            col1 = _p(_C_CYAN + mname[:W_MODEL] + _C_RESET, W_MODEL)
+            col2 = _p(req_str, W_MREQ)
+            col3 = _p(tok_str, W_MTOK)
+            col4 = _p(last_str, W_MLAST)
+            row = "    " + col1 + _DIM_DOT + col2 + _DIM_DOT + col3 + _DIM_DOT + col4 + _DIM_DOT + dt_str
+            print(_box_line(row, W))
+
 
     # Per-account stats
     acct_stats = _aggregate_per_account(usage_data)
     if acct_stats:
         print(_box_line("", W))
         print(_box_line("  Per-account:", W))
+
+        W_ACCT = 24
+        W_REQ  = 5
+        W_TOT  = 19
+        W_LAST = 19
+
+        # Header
+        h_acct = _p(_C_BOLD + "account" + _C_RESET, W_ACCT)
+        h_req  = _p(_C_BOLD + "req" + _C_RESET, W_REQ)
+        h_tot  = _p(_C_BOLD + "total token" + _C_RESET, W_TOT)
+        h_last = _p(_C_BOLD + "last token" + _C_RESET, W_LAST)
+        h_time = _C_BOLD + "last req." + _C_RESET
+        header = "    " + h_acct + _DIM_DOT + h_req + _DIM_DOT + h_tot + _DIM_DOT + h_last + _DIM_DOT + h_time
+        print(_box_line(header, W))
+        print(_box_line(divider, W))
+
         for acct, adata in sorted(acct_stats.items(), key=lambda x: -x[1]["tokens"]):
-            total    = adata["requests"]
-            fails    = adata["fails"]
-            ok       = total - fails
-            tok      = adata["tokens"]
-            last_tok = adata["last_tok"]
-            dt_str   = _fmt_local_dt(adata["last_time"]) if adata["last_time"] else ""
+            total  = adata["requests"]
+            fails  = adata["fails"]
+            dt_str = _fmt_local_dt(adata["last_time"]) if adata["last_time"] else ""
 
-            req_str = "{:>3}  {}{:>3}{}  {}{:>3}{}".format(
-                total,
-                _C_GREEN, ok,    _C_RESET,
-                _C_RED,   fails, _C_RESET,
-            )
+            req_color = _C_RED if fails > 0 else _C_GREEN
+            req_str = req_color + str(total) + _C_RESET
 
-            last_tok_s  = _fmt_tokens(last_tok)
-            total_tok_s = _fmt_tokens(tok)
-            if dt_str:
-                tok_str = "{}{}{} / {}{} \u00b7 {}{}".format(
-                    _C_DIM, last_tok_s, _C_RESET,
-                    total_tok_s,
-                    _C_DIM, dt_str, _C_RESET,
-                )
-            else:
-                tok_str = total_tok_s
-            row = "    {:<20}  {}  {}".format(
-                acct[:20], req_str, tok_str
-            )
+            tot_tok  = _fmt_tok_compact(adata.get("input", 0), adata.get("output", 0), adata.get("reasoning", 0))
+            last_tok = _fmt_tok_compact(adata.get("last_input", 0), adata.get("last_output", 0), adata.get("last_reasoning", 0))
+
+            col1 = _p(_C_CYAN + acct[:W_ACCT] + _C_RESET, W_ACCT)
+            col2 = _p(req_str, W_REQ)
+            col3 = _p(tot_tok, W_TOT)
+            col4 = _p(last_tok, W_LAST)
+            col5 = _C_DIM + dt_str + _C_RESET
+
+            row = "    " + col1 + _DIM_DOT + col2 + _DIM_DOT + col3 + _DIM_DOT + col4 + _DIM_DOT + col5
             print(_box_line(row, W))
+
 
     # --- quota section (shown when --quota flag used) ---
     if quota_data and files:
@@ -642,8 +723,8 @@ def _print_status_dashboard(base_dir, provider, status, W,
         qdiv = "  \u2500\u2500 quota " + "\u2500" * max(0, W - 16)
         print(_box_line(qdiv, W))
         for f in files:
-            name = f.get("name", "")
-            email = f.get("email", f.get("name", "?"))
+            name = f.get("name") or f.get("id", "")
+            email = f.get("email", f.get("name") or f.get("id", "?"))
             plan_type = (f.get("id_token") or {}).get("plan_type", "")
             label = email
             if plan_type:

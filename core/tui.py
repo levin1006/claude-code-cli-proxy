@@ -543,8 +543,9 @@ def _tui_main_loop(base_dir, provider=None):
             action = _tui_key_to_action(_read_key_timeout(0.03))
             dirty = False
 
-            # auto refresh is disabled in TUI loop to keep key responsiveness stable.
-            # use 'r' for explicit refresh.
+            if not state.get("busy"):
+                if _refresh_current(force=False, heavy=False):
+                    dirty = True
 
             if action is None:
                 if dirty:

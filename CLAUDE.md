@@ -66,7 +66,7 @@ Shell wrappers (thin)             Python core (shared)
 Defined in `core/cc_proxy.py` (single source of truth, synced to both shell wrappers):
 - `antigravity`: `18417`
 - `claude`: `18418`
-- `codex`: `18419`
+- `openai`: `18419`
 - `gemini`: `18420`
 
 ## Common commands
@@ -115,7 +115,7 @@ Runs native Claude Code (proxy env vars removed).
 ```
 cc-claude
 cc-gemini
-cc-codex
+cc-openai
 cc-ag-claude
 cc-ag-gemini
 ```
