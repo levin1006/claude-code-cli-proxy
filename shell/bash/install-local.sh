@@ -9,9 +9,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 INSTALL_PY="$REPO_ROOT/installers/install.py"
 
-echo "[install-local] Local installation: repo -> ~/.cli-proxy/"
-cd "$REPO_ROOT"
-python3 "$INSTALL_PY" --source local
+if [[ " $* " == *" --uninstall "* ]] || [[ "$1" == "--uninstall" ]]; then
+    echo "[install-local] Uninstalling cli-proxy..."
+    python3 "$INSTALL_PY" --uninstall
+else
+    echo "[install-local] Local installation: repo -> ~/.cli-proxy/"
+    cd "$REPO_ROOT"
+    python3 "$INSTALL_PY" --source local
+fi
 
 if [ $? -ne 0 ]; then
     echo "[install-local] Failed."
