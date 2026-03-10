@@ -589,16 +589,30 @@ def _print_status_dashboard(base_dir, provider, status, W,
             model_stats[model_name]["output"] += output_tok
             model_stats[model_name]["reasoning"] += reason_tok
 
+    _C_CYAN   = "\033[36m"
+    _C_YELLOW = "\033[33m"
+    _C_TEAL   = "\033[38;5;73m"   # muted blue-green for input
+    _C_PURPLE = "\033[38;5;139m" # muted purple for output
+    _DOT      = "  \u00b7  "
+    _DIM_DOT  = _C_DIM + _DOT + _C_RESET
+
+    def _p(text, width):
+        return text + " " * max(0, width - _visible_len(text))
+
+    def _fmt_tok_compact(inp, out, rsn):
+        """i<cyan>val</cyan>/o<purple>val</purple>/r<yellow-or-dim>val</>"""
+        i_s = _C_TEAL   + _fmt_tokens(inp) + _C_RESET
+        o_s = _C_PURPLE + _fmt_tokens(out) + _C_RESET
+        r_val = _fmt_tokens(rsn) if rsn > 0 else "0"
+        r_s = (_C_YELLOW + r_val + _C_RESET) if rsn > 0 else (_C_DIM + r_val + _C_RESET)
+        return "i{}/o{}/r{}".format(i_s, o_s, r_s)
+
     if model_stats:
         print(_box_line("", W))
         print(_box_line("  Models:", W))
         for mname, mdata in sorted(model_stats.items(), key=lambda x: -(x[1]["input"] + x[1]["output"] + x[1]["reasoning"])):
-            reason_str = "  \U0001f4ad{}".format(_fmt_tokens(mdata["reasoning"])) if mdata["reasoning"] > 0 else ""
-            row = "    {:<24}  {:>3} req  in {:>6}  out {:>6}{}".format(
-                mname[:24], mdata["requests"],
-                _fmt_tokens(mdata["input"]), _fmt_tokens(mdata["output"]),
-                reason_str
-            )
+            tok_str = _fmt_tok_compact(mdata["input"], mdata["output"], mdata["reasoning"])
+            row = "    {:<24}  {:>3} req  {}".format(mname[:24], mdata["requests"], tok_str)
             print(_box_line(row, W))
 
     # Daily stats
@@ -611,7 +625,11 @@ def _print_status_dashboard(base_dir, provider, status, W,
         for day in all_days[-7:]:
             day_req = requests_by_day.get(day, 0)
             day_tok = tokens_by_day.get(day, 0)
-            row = "    {}  {:>6} req  {:>8} tokens".format(day, day_req, _fmt_tokens(day_tok))
+            tok_str = _C_TEAL + _fmt_tokens(day_tok) + _C_RESET + " tokens"
+            row = "    {}" + _DIM_DOT + "{:>3} req" + _DIM_DOT + "{}"
+            row = "    {}{}{}{}{}{}{}" .format(
+                day, _DIM_DOT, "{:>3}".format(day_req), " req", _DIM_DOT, tok_str, ""
+            )
             print(_box_line(row, W))
 
     # Per-account stats
@@ -620,30 +638,11 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line("", W))
         print(_box_line("  Per-account:", W))
 
-        _C_CYAN   = "\033[36m"
-        _C_YELLOW = "\033[33m"
-        _C_BLUE   = "\033[34m"
-        _DOT = "  \u00b7  "   # spaced dot separator
-
-        def _fmt_tok_compact(inp, out, rsn):
-            """Format as i29.9K/o135/r0 with dim r when 0."""
-            r_str = _fmt_tokens(rsn) if rsn > 0 else "0"
-            base = "i{}/o{}/r".format(_fmt_tokens(inp), _fmt_tokens(out))
-            if rsn > 0:
-                return base + _C_YELLOW + r_str + _C_RESET
-            else:
-                return base + _C_DIM + r_str + _C_RESET
-
-        def _p(text, width):
-            return text + " " * max(0, width - _visible_len(text))
-
-        # Column widths
-        W_ACCT   = 26
-        W_REQ    = 12
-        W_TOT    = 22
-        W_LAST   = 22
-
-        _DIM_DOT = _C_DIM + _DOT + _C_RESET
+        # Column widths (tighter)
+        W_ACCT = 24
+        W_REQ  = 10
+        W_TOT  = 19
+        W_LAST = 19
 
         # Header
         h_acct = _p(_C_BOLD + "account" + _C_RESET, W_ACCT)
