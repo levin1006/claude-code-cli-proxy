@@ -610,9 +610,22 @@ def _print_status_dashboard(base_dir, provider, status, W,
     if model_stats:
         print(_box_line("", W))
         print(_box_line("  Models:", W))
+
+        W_MODEL = 24
+        W_MREQ  = 6
+
+        h_model = _p(_C_BOLD + "model" + _C_RESET, W_MODEL)
+        h_mreq  = _p(_C_BOLD + "req" + _C_RESET, W_MREQ)
+        h_mtok  = _C_BOLD + "token (i/o/r)" + _C_RESET
+        mheader = "    " + h_model + _DIM_DOT + h_mreq + _DIM_DOT + h_mtok
+        print(_box_line(mheader, W))
+        print(_box_line(divider, W))
+
         for mname, mdata in sorted(model_stats.items(), key=lambda x: -(x[1]["input"] + x[1]["output"] + x[1]["reasoning"])):
             tok_str = _fmt_tok_compact(mdata["input"], mdata["output"], mdata["reasoning"])
-            row = "    {:<24}  {:>3} req  {}".format(mname[:24], mdata["requests"], tok_str)
+            col1 = _p(_C_CYAN + mname[:W_MODEL] + _C_RESET, W_MODEL)
+            col2 = _p(str(mdata["requests"]), W_MREQ)
+            row = "    " + col1 + _DIM_DOT + col2 + _DIM_DOT + tok_str
             print(_box_line(row, W))
 
     # Daily stats
