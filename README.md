@@ -28,62 +28,60 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 - `docs/claude-code-cliproxy-linux-guide.md` (Linux 운영 가이드)
 - `config.yaml` (루트 샘플/운영용 기본 설정)
 
-## 개발 반영 설치 (로컬 소스 동기화)
+## 설치 방법
 
-> 권장 개발 플로우: 이곳 저장소(`claude-code-cli-proxy`) 폴더에서 코드를 수정한 뒤, 아래 명령어로 `~/.cli-proxy` 실행 환경에 동기화(복사 및 덮어쓰기)합니다.
-> **로컬 동기화 시에는 불필요한 쉘 래퍼를 우회하여 아래처럼 Python 코어 스크립트(`install.py`)를 직접 실행하는 것을 공식 방법으로 권장합니다.**
+저장소 루트에 4개의 진입점 스크립트가 있습니다:
 
-### Windows (repo root에서)
+| 스크립트 | 용도 |
+|---|---|
+| `install-local.ps1` | Windows — 현재 로컬 소스 → `~/.cli-proxy` 동기화 |
+| `install-local.sh` | Linux/macOS — 현재 로컬 소스 → `~/.cli-proxy` 동기화 |
+| `install-remote.ps1` | Windows — GitHub main 최신본 다운로드 후 설치 |
+| `install-remote.sh` | Linux/macOS — GitHub main 최신본 다운로드 후 설치 |
 
+실제 설치 로직은 `shell/` 디렉터리 내부에 있으며, 루트 스크립트는 얇은 진입점입니다.
+
+### 로컬 개발 동기화 (수정사항 반영)
+
+> 저장소에서 코드를 수정한 뒤 `~/.cli-proxy/` 실행 환경에 동기화할 때 사용합니다.
+> 설치 완료 후 모든 프록시가 자동으로 재시작됩니다.
+
+**Windows (PowerShell):**
 ```powershell
-python installers\install.py --source local
+.\install-local.ps1
 ```
 
-### Linux / macOS (repo root에서)
-
+**Linux / macOS:**
 ```bash
-python3 installers/install.py --source local
+bash install-local.sh
 ```
 
----
+### 원격 설치 (GitHub에서 최신본 다운로드)
 
-## 배포용 설치 (one-liner, `~/.cli-proxy`에 설치)
+> 저장소를 클론하지 않고 GitHub main 브랜치 최신 코드를 `~/.cli-proxy/`에 설치합니다.
 
-이 섹션은 **배포/최종 사용자 설치용**입니다. 저장소를 클론할 필요 없이 터미널에 명령어 한 줄을 복사하여 붙여넣으면 GitHub에서 최신 코드를 다운받아 `~/.cli-proxy` 타겟 디렉토리에 설치를 완료합니다.
-설치 과정에서 알아서 쉘 프로필(`$PROFILE`, `~/.bashrc`, `~/.zshrc`)을 찾아 래퍼 스크립트를 로드하는 구문을 자동 등록해 주므로, 설치가 끝나면 터미널 창을 껐다 켜기만 하면 바로 사용할 수 있습니다.
-
-### Windows (PowerShell)
-
-관리자 권한 없이 일반 PowerShell에서 실행 가능합니다.
-
+**Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.ps1 | iex
+.\install-remote.ps1
 ```
 
-배포/검증용으로 특정 태그를 완전히 고정하려면(권장):
-
+또는 저장소 클론 없이 직접 실행 (최초 설치):
 ```powershell
-irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.Y.Z/installers/install.ps1 | iex
+irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.ps1 | iex
 ```
 
-### Linux / macOS (Bash)
-
+**Linux / macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.sh | bash
+bash install-remote.sh
 ```
 
-배포/검증용으로 특정 태그를 완전히 고정하려면(권장):
-
+또는 저장소 클론 없이 직접 실행 (최초 설치):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.Y.Z/installers/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.sh | bash
 ```
 
-원격/컨테이너 환경에서 management 링크 포트를 분리하려면(선택):
+> **주의:** `install-remote`는 GitHub main 브랜치에서 파일을 다운로드합니다. 로컬 변경사항이 덮어씌워지므로 개발 중에는 `install-local`을 사용하세요.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/vX.Y.Z/installers/install.sh | bash -s -- --remote
-```
----
 
 ### 실행 명령 (양 플랫폼 공통)
 
