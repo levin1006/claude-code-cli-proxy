@@ -22,7 +22,7 @@ PRESETS = {
     "ag-claude": ("antigravity",  "claude-opus-4-6-thinking",  "claude-sonnet-4-6",       "claude-sonnet-4-6"),
     "ag-gemini": ("antigravity",  "gemini-3.1-pro-high",       "gemini-3.1-pro-low",      "gemini-3-flash"),
     "claude":    ("claude",       "claude-opus-4-6",           "claude-sonnet-4-6",       "claude-haiku-4-5-20251001"),
-    "openai":    ("openai",       "gpt-5.4-xhigh",             "gpt-5.4-high",            "gpt-5.3-codex-spark"),
+    "openai":    ("openai",       "gpt-5.4(xhigh)",            "gpt-5.4(high)",           "gpt-5.3-codex-spark"),
     "gemini":    ("gemini",       "gemini-3-pro-preview",      "gemini-3-flash-preview",  "gemini-2.5-flash-lite"),
 }
 
