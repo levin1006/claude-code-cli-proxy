@@ -82,6 +82,25 @@ curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/mai
 
 > **주의:** `install-remote`는 GitHub main 브랜치에서 파일을 다운로드합니다. 로컬 변경사항이 덮어씌워지므로 개발 중에는 `install-local`을 사용하세요.
 
+### 제거 (Uninstall)
+
+`--uninstall` 플래그를 동일한 진입점 스크립트에 전달합니다. 프록시 정지 → shim 제거 → 프로필 라인 삭제 → `~/.cli-proxy/` 삭제 순서로 실행됩니다.
+
+**Windows:**
+```powershell
+.\install-local.ps1 --uninstall
+```
+
+**Linux / macOS (로컬 저장소에서):**
+```bash
+bash install-local.sh --uninstall
+```
+
+**Linux / macOS (저장소 없이, curl):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.sh | bash -s -- --uninstall
+```
+
 
 ### 실행 명령 (양 플랫폼 공통)
 
