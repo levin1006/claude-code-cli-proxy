@@ -620,56 +620,66 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line("", W))
         print(_box_line("  Per-account:", W))
 
+        _C_CYAN   = "\033[36m"
+        _C_YELLOW = "\033[33m"
+        _C_BLUE   = "\033[34m"
+        _DOT = "  \u00b7  "   # spaced dot separator
+
+        def _fmt_tok_compact(inp, out, rsn):
+            """Format as i29.9K/o135/r0 with dim r when 0."""
+            r_str = _fmt_tokens(rsn) if rsn > 0 else "0"
+            base = "i{}/o{}/r".format(_fmt_tokens(inp), _fmt_tokens(out))
+            if rsn > 0:
+                return base + _C_YELLOW + r_str + _C_RESET
+            else:
+                return base + _C_DIM + r_str + _C_RESET
+
         def _p(text, width):
             return text + " " * max(0, width - _visible_len(text))
 
-        h_acct = _p("account", 24)
-        h_req = _p("tot(ok/fail)", 14)
-        h_last = _p("last (in/out/\U0001f4ad)", 27)
-        h_tot = _p("total (in/out/\U0001f4ad)", 27)
-        h_time = "last req."
+        # Column widths
+        W_ACCT   = 26
+        W_REQ    = 12
+        W_TOT    = 22
+        W_LAST   = 22
 
-        header = "    " + h_acct + h_req + h_last + h_tot + h_time
+        _DIM_DOT = _C_DIM + _DOT + _C_RESET
+
+        # Header
+        h_acct = _p(_C_BOLD + "account" + _C_RESET, W_ACCT)
+        h_req  = _p(_C_BOLD + "total(ok/fail)" + _C_RESET, W_REQ)
+        h_tot  = _p(_C_BOLD + "total token" + _C_RESET, W_TOT)
+        h_last = _p(_C_BOLD + "last token" + _C_RESET, W_LAST)
+        h_time = _C_BOLD + "last req." + _C_RESET
+        header = "    " + h_acct + _DIM_DOT + h_req + _DIM_DOT + h_tot + _DIM_DOT + h_last + _DIM_DOT + h_time
         print(_box_line(header, W))
         print(_box_line(divider, W))
 
         for acct, adata in sorted(acct_stats.items(), key=lambda x: -x[1]["tokens"]):
-            total    = adata["requests"]
-            fails    = adata["fails"]
-            ok       = total - fails
-            dt_str   = _fmt_local_dt(adata["last_time"]) if adata["last_time"] else ""
+            total  = adata["requests"]
+            fails  = adata["fails"]
+            ok     = total - fails
+            dt_str = _fmt_local_dt(adata["last_time"]) if adata["last_time"] else ""
 
             fail_color = _C_RED if fails > 0 else _C_DIM
-            req_str = "{:>4}({}{:>3}{}/{}{:>2}{})".format(
-                total, _C_GREEN, ok, _C_RESET, fail_color, fails, _C_RESET
+            req_str = "{}({}{}{}/{}{}{})".format(
+                total,
+                _C_GREEN, ok, _C_RESET,
+                fail_color, fails, _C_RESET
             )
 
-            last_reason = adata.get("last_reasoning", 0)
-            last_in_s = _fmt_tokens(adata.get("last_input", 0))
-            last_out_s = _fmt_tokens(adata.get("last_output", 0))
-            last_reason_s = _fmt_tokens(last_reason) if last_reason > 0 else "0"
+            tot_tok  = _fmt_tok_compact(adata.get("input", 0), adata.get("output", 0), adata.get("reasoning", 0))
+            last_tok = _fmt_tok_compact(adata.get("last_input", 0), adata.get("last_output", 0), adata.get("last_reasoning", 0))
 
-            total_reason = adata.get("reasoning", 0)
-            total_in_s = _fmt_tokens(adata.get("input", 0))
-            total_out_s = _fmt_tokens(adata.get("output", 0))
-            total_reason_s = _fmt_tokens(total_reason) if total_reason > 0 else "0"
-
-            last_str = "in {:>5} out {:>5}".format(last_in_s, last_out_s)
-            if last_reason > 0:
-                last_str += " \U0001f4ad{:>4}".format(last_reason_s)
-
-            tot_str = "in {:>5} out {:>5}".format(total_in_s, total_out_s)
-            if total_reason > 0:
-                tot_str += " \U0001f4ad{:>4}".format(total_reason_s)
-
-            col1 = _p(acct[:22], 24)
-            col2 = _p(req_str, 14)
-            col3 = _p(last_str, 27)
-            col4 = _p(tot_str, 27)
+            col1 = _p(_C_CYAN + acct[:W_ACCT] + _C_RESET, W_ACCT)
+            col2 = _p(req_str, W_REQ)
+            col3 = _p(tot_tok, W_TOT)
+            col4 = _p(last_tok, W_LAST)
             col5 = _C_DIM + dt_str + _C_RESET
 
-            row = "    " + col1 + col2 + col3 + col4 + col5
+            row = "    " + col1 + _DIM_DOT + col2 + _DIM_DOT + col3 + _DIM_DOT + col4 + _DIM_DOT + col5
             print(_box_line(row, W))
+
 
     # --- quota section (shown when --quota flag used) ---
     if quota_data and files:
