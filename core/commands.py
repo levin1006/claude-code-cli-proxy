@@ -105,14 +105,9 @@ def _install_profile_linux(base_dir, hint_only):
         return
 
     if hint_only and missing_src:
+        # hint_only is used post-install (potentially via curl|bash subprocess).
+        # input() would get EOFError in that context, so auto-register silently.
         print("[cc-proxy] First-time setup detected.")
-        try:
-            answer = input("[cc-proxy] Add loader to your shell profile now? (Y/N) ")
-        except (EOFError, KeyboardInterrupt):
-            return
-        if not answer.strip().lower().startswith("y"):
-            print("[cc-proxy] Skipped. Run cc_proxy_install_profile later.")
-            return
 
     for rc in missing_src:
         with rc.open("a") as f:

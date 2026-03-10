@@ -71,7 +71,11 @@ rm -f "$TEMP_SCRIPT"
 
 PROXY_SCRIPT="$HOME/.cli-proxy/shell/bash/cc-proxy.sh"
 if [ -f "$PROXY_SCRIPT" ]; then
-    echo -e "\n\033[0;36mAuto-loading CLIProxyAPI into current session...\033[0m"
-    source "$PROXY_SCRIPT"
-    echo -e "\033[0;32mDone! You can now use cc, cc-proxy-start-all, etc.\033[0m"
+    echo ""
+    echo -e "\033[0;32mInstallation complete!\033[0m"
+    echo ""
+    echo -e "\033[0;36mTo activate in this session, run:\033[0m"
+    echo -e "  \033[1msource \"$PROXY_SCRIPT\"\033[0m"
+    echo ""
+    echo "New terminals will load helpers automatically."
 fi
