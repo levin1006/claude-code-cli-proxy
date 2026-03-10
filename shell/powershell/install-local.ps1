@@ -34,6 +34,5 @@ Write-Host "[install-local] Using Python: $pythonPath" -ForegroundColor DarkGray
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[install-local] Failed." -ForegroundColor Red
 } else {
-    Write-Host "[install-local] Done. Restarting proxies..." -ForegroundColor Green
-    & $pythonPath (Join-Path $env:USERPROFILE ".cli-proxy\core\cc_proxy.py") start all
+    Write-Host "[install-local] Done." -ForegroundColor Green
 }
