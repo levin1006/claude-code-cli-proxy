@@ -619,36 +619,7 @@ def _print_status_dashboard(base_dir, provider, status, W,
         r_s = (_C_AMBER + r_val + _C_RESET) if rsn > 0 else (_C_DIM + r_val + _C_RESET)
         return "i{}/o{}/r{}".format(i_s, o_s, r_s)
 
-    if model_stats:
-        print(_box_line("", W))
-        print(_box_line("  Models:", W))
-
-        W_MODEL = 24
-        W_MREQ  = 5
-        W_MTOK  = 19
-
-        h_model = _p(_C_BOLD + "model" + _C_RESET, W_MODEL)
-        h_mreq  = _p(_C_BOLD + "req" + _C_RESET, W_MREQ)
-        h_mtok  = _p(_C_BOLD + "total token" + _C_RESET, W_MTOK)
-        h_mlast = _C_BOLD + "last req." + _C_RESET
-        mheader = "    " + h_model + _DIM_DOT + h_mreq + _DIM_DOT + h_mtok + _DIM_DOT + h_mlast
-        print(_box_line(mheader, W))
-        print(_box_line(divider, W))
-
-        for mname, mdata in sorted(model_stats.items(), key=lambda x: -(x[1]["input"] + x[1]["output"] + x[1]["reasoning"])):
-            fails  = mdata["fails"]
-            total  = mdata["requests"]
-            req_color = _C_RED if fails > 0 else _C_GREEN
-            req_str = req_color + str(total) + _C_RESET
-            tok_str  = _fmt_tok_compact(mdata["input"], mdata["output"], mdata["reasoning"])
-            dt_str   = _C_DIM + (_fmt_local_dt(mdata["last_time"]) if mdata["last_time"] else "") + _C_RESET
-            col1 = _p(_C_CYAN + mname[:W_MODEL] + _C_RESET, W_MODEL)
-            col2 = _p(req_str, W_MREQ)
-            col3 = _p(tok_str, W_MTOK)
-            row = "    " + col1 + _DIM_DOT + col2 + _DIM_DOT + col3 + _DIM_DOT + dt_str
-            print(_box_line(row, W))
-
-    # Daily stats
+    # Daily stats (shown before models)
     requests_by_day = u.get("requests_by_day", {})
     tokens_by_day = u.get("tokens_by_day", {})
     all_days = sorted(set(list(requests_by_day.keys()) + list(tokens_by_day.keys())))
@@ -659,11 +630,44 @@ def _print_status_dashboard(base_dir, provider, status, W,
             day_req = requests_by_day.get(day, 0)
             day_tok = tokens_by_day.get(day, 0)
             tok_str = _C_TEAL + _fmt_tokens(day_tok) + _C_RESET + " tokens"
-            row = "    {}" + _DIM_DOT + "{:>3} req" + _DIM_DOT + "{}"
-            row = "    {}{}{}{}{}{}{}" .format(
+            row = "    {}{}{}{}{}{}{}".format(
                 day, _DIM_DOT, "{:>3}".format(day_req), " req", _DIM_DOT, tok_str, ""
             )
             print(_box_line(row, W))
+
+    if model_stats:
+        print(_box_line("", W))
+        print(_box_line("  Models:", W))
+
+        W_MODEL = 24
+        W_MREQ  = 5
+        W_MTOK  = 19
+        W_MLAST = 19
+
+        h_model = _p(_C_BOLD + "model" + _C_RESET, W_MODEL)
+        h_mreq  = _p(_C_BOLD + "req" + _C_RESET, W_MREQ)
+        h_mtok  = _p(_C_BOLD + "total token" + _C_RESET, W_MTOK)
+        h_mlast = _p(_C_BOLD + "last token" + _C_RESET, W_MLAST)
+        h_mtime = _C_BOLD + "last req." + _C_RESET
+        mheader = "    " + h_model + _DIM_DOT + h_mreq + _DIM_DOT + h_mtok + _DIM_DOT + h_mlast + _DIM_DOT + h_mtime
+        print(_box_line(mheader, W))
+        print(_box_line(divider, W))
+
+        for mname, mdata in sorted(model_stats.items(), key=lambda x: -(x[1]["input"] + x[1]["output"] + x[1]["reasoning"])):
+            fails     = mdata["fails"]
+            total     = mdata["requests"]
+            req_color = _C_RED if fails > 0 else _C_GREEN
+            req_str   = req_color + str(total) + _C_RESET
+            tok_str   = _fmt_tok_compact(mdata["input"],      mdata["output"],      mdata["reasoning"])
+            last_str  = _fmt_tok_compact(mdata["last_input"], mdata["last_output"], mdata["last_reasoning"])
+            dt_str    = _C_DIM + (_fmt_local_dt(mdata["last_time"]) if mdata["last_time"] else "") + _C_RESET
+            col1 = _p(_C_CYAN + mname[:W_MODEL] + _C_RESET, W_MODEL)
+            col2 = _p(req_str, W_MREQ)
+            col3 = _p(tok_str, W_MTOK)
+            col4 = _p(last_str, W_MLAST)
+            row = "    " + col1 + _DIM_DOT + col2 + _DIM_DOT + col3 + _DIM_DOT + col4 + _DIM_DOT + dt_str
+            print(_box_line(row, W))
+
 
     # Per-account stats
     acct_stats = _aggregate_per_account(usage_data)
