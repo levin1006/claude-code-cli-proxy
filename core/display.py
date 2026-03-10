@@ -578,16 +578,28 @@ def _print_status_dashboard(base_dir, provider, status, W,
     for api_data in apis.values():
         for model_name, model_data in api_data.get("models", {}).items():
             details = model_data.get("details", [])
-            req_count = len(details)
-            input_tok = sum(int(d.get("tokens", {}).get("input_tokens", 0) or 0) for d in details)
-            output_tok = sum(int(d.get("tokens", {}).get("output_tokens", 0) or 0) for d in details)
-            reason_tok = sum(int(d.get("tokens", {}).get("reasoning_tokens", 0) or 0) for d in details)
             if model_name not in model_stats:
-                model_stats[model_name] = {"requests": 0, "input": 0, "output": 0, "reasoning": 0}
-            model_stats[model_name]["requests"] += req_count
-            model_stats[model_name]["input"] += input_tok
-            model_stats[model_name]["output"] += output_tok
-            model_stats[model_name]["reasoning"] += reason_tok
+                model_stats[model_name] = {
+                    "requests": 0, "fails": 0,
+                    "input": 0, "output": 0, "reasoning": 0,
+                    "last_time": "",
+                    "last_input": 0, "last_output": 0, "last_reasoning": 0,
+                }
+            s = model_stats[model_name]
+            for d in details:
+                toks = d.get("tokens", {})
+                s["requests"] += 1
+                s["input"]    += int(toks.get("input_tokens",     0) or 0)
+                s["output"]   += int(toks.get("output_tokens",    0) or 0)
+                s["reasoning"] += int(toks.get("reasoning_tokens", 0) or 0)
+                if d.get("failed", False):
+                    s["fails"] += 1
+                ts = d.get("timestamp", "")
+                if ts > s["last_time"]:
+                    s["last_time"]      = ts
+                    s["last_input"]     = int(toks.get("input_tokens",     0) or 0)
+                    s["last_output"]    = int(toks.get("output_tokens",    0) or 0)
+                    s["last_reasoning"] = int(toks.get("reasoning_tokens", 0) or 0)
 
     _C_CYAN   = "\033[36m"
     _C_YELLOW = "\033[33m"
@@ -612,20 +624,33 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line("  Models:", W))
 
         W_MODEL = 24
-        W_MREQ  = 6
+        W_MREQ  = 10
+        W_MTOK  = 19
 
         h_model = _p(_C_BOLD + "model" + _C_RESET, W_MODEL)
-        h_mreq  = _p(_C_BOLD + "req" + _C_RESET, W_MREQ)
-        h_mtok  = _C_BOLD + "token (i/o/r)" + _C_RESET
-        mheader = "    " + h_model + _DIM_DOT + h_mreq + _DIM_DOT + h_mtok
+        h_mreq  = _p(_C_BOLD + "req(ok/fail)" + _C_RESET, W_MREQ)
+        h_mtok  = _p(_C_BOLD + "total token" + _C_RESET, W_MTOK)
+        h_mlast = _C_BOLD + "last req." + _C_RESET
+        mheader = "    " + h_model + _DIM_DOT + h_mreq + _DIM_DOT + h_mtok + _DIM_DOT + h_mlast
         print(_box_line(mheader, W))
         print(_box_line(divider, W))
 
         for mname, mdata in sorted(model_stats.items(), key=lambda x: -(x[1]["input"] + x[1]["output"] + x[1]["reasoning"])):
-            tok_str = _fmt_tok_compact(mdata["input"], mdata["output"], mdata["reasoning"])
+            total = mdata["requests"]
+            fails = mdata["fails"]
+            ok    = total - fails
+            fail_color = _C_RED if fails > 0 else _C_DIM
+            req_str = "{}({}{}{}/{}{}{})".format(
+                total,
+                _C_GREEN, ok, _C_RESET,
+                fail_color, fails, _C_RESET
+            )
+            tok_str  = _fmt_tok_compact(mdata["input"], mdata["output"], mdata["reasoning"])
+            dt_str   = _C_DIM + (_fmt_local_dt(mdata["last_time"]) if mdata["last_time"] else "") + _C_RESET
             col1 = _p(_C_CYAN + mname[:W_MODEL] + _C_RESET, W_MODEL)
-            col2 = _p(str(mdata["requests"]), W_MREQ)
-            row = "    " + col1 + _DIM_DOT + col2 + _DIM_DOT + tok_str
+            col2 = _p(req_str, W_MREQ)
+            col3 = _p(tok_str, W_MTOK)
+            row = "    " + col1 + _DIM_DOT + col2 + _DIM_DOT + col3 + _DIM_DOT + dt_str
             print(_box_line(row, W))
 
     # Daily stats
