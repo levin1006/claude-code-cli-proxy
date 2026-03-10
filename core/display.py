@@ -612,11 +612,11 @@ def _print_status_dashboard(base_dir, provider, status, W,
         return text + " " * max(0, width - _visible_len(text))
 
     def _fmt_tok_compact(inp, out, rsn):
-        """i<cyan>val</cyan>/o<purple>val</purple>/r<yellow-or-dim>val</>"""
         i_s = _C_TEAL   + _fmt_tokens(inp) + _C_RESET
         o_s = _C_PURPLE + _fmt_tokens(out) + _C_RESET
         r_val = _fmt_tokens(rsn) if rsn > 0 else "0"
-        r_s = (_C_YELLOW + r_val + _C_RESET) if rsn > 0 else (_C_DIM + r_val + _C_RESET)
+        _C_AMBER = "\033[38;5;136m"   # soft amber for reasoning
+        r_s = (_C_AMBER + r_val + _C_RESET) if rsn > 0 else (_C_DIM + r_val + _C_RESET)
         return "i{}/o{}/r{}".format(i_s, o_s, r_s)
 
     if model_stats:
@@ -624,11 +624,11 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line("  Models:", W))
 
         W_MODEL = 24
-        W_MREQ  = 10
+        W_MREQ  = 5
         W_MTOK  = 19
 
         h_model = _p(_C_BOLD + "model" + _C_RESET, W_MODEL)
-        h_mreq  = _p(_C_BOLD + "req(ok/fail)" + _C_RESET, W_MREQ)
+        h_mreq  = _p(_C_BOLD + "req" + _C_RESET, W_MREQ)
         h_mtok  = _p(_C_BOLD + "total token" + _C_RESET, W_MTOK)
         h_mlast = _C_BOLD + "last req." + _C_RESET
         mheader = "    " + h_model + _DIM_DOT + h_mreq + _DIM_DOT + h_mtok + _DIM_DOT + h_mlast
@@ -636,15 +636,10 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line(divider, W))
 
         for mname, mdata in sorted(model_stats.items(), key=lambda x: -(x[1]["input"] + x[1]["output"] + x[1]["reasoning"])):
-            total = mdata["requests"]
-            fails = mdata["fails"]
-            ok    = total - fails
-            fail_color = _C_RED if fails > 0 else _C_DIM
-            req_str = "{}({}{}{}/{}{}{})".format(
-                total,
-                _C_GREEN, ok, _C_RESET,
-                fail_color, fails, _C_RESET
-            )
+            fails  = mdata["fails"]
+            total  = mdata["requests"]
+            req_color = _C_RED if fails > 0 else _C_GREEN
+            req_str = req_color + str(total) + _C_RESET
             tok_str  = _fmt_tok_compact(mdata["input"], mdata["output"], mdata["reasoning"])
             dt_str   = _C_DIM + (_fmt_local_dt(mdata["last_time"]) if mdata["last_time"] else "") + _C_RESET
             col1 = _p(_C_CYAN + mname[:W_MODEL] + _C_RESET, W_MODEL)
@@ -676,15 +671,14 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line("", W))
         print(_box_line("  Per-account:", W))
 
-        # Column widths (tighter)
         W_ACCT = 24
-        W_REQ  = 10
+        W_REQ  = 5
         W_TOT  = 19
         W_LAST = 19
 
         # Header
         h_acct = _p(_C_BOLD + "account" + _C_RESET, W_ACCT)
-        h_req  = _p(_C_BOLD + "total(ok/fail)" + _C_RESET, W_REQ)
+        h_req  = _p(_C_BOLD + "req" + _C_RESET, W_REQ)
         h_tot  = _p(_C_BOLD + "total token" + _C_RESET, W_TOT)
         h_last = _p(_C_BOLD + "last token" + _C_RESET, W_LAST)
         h_time = _C_BOLD + "last req." + _C_RESET
@@ -695,15 +689,10 @@ def _print_status_dashboard(base_dir, provider, status, W,
         for acct, adata in sorted(acct_stats.items(), key=lambda x: -x[1]["tokens"]):
             total  = adata["requests"]
             fails  = adata["fails"]
-            ok     = total - fails
             dt_str = _fmt_local_dt(adata["last_time"]) if adata["last_time"] else ""
 
-            fail_color = _C_RED if fails > 0 else _C_DIM
-            req_str = "{}({}{}{}/{}{}{})".format(
-                total,
-                _C_GREEN, ok, _C_RESET,
-                fail_color, fails, _C_RESET
-            )
+            req_color = _C_RED if fails > 0 else _C_GREEN
+            req_str = req_color + str(total) + _C_RESET
 
             tot_tok  = _fmt_tok_compact(adata.get("input", 0), adata.get("output", 0), adata.get("reasoning", 0))
             last_tok = _fmt_tok_compact(adata.get("last_input", 0), adata.get("last_output", 0), adata.get("last_reasoning", 0))
