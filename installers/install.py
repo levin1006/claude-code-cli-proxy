@@ -399,6 +399,12 @@ def parse_args() -> argparse.Namespace:
         help="Local repo root for --source local/auto. If omitted, infer from installers/install.py location.",
     )
     parser.add_argument(
+        "--port-offset",
+        default="",
+        help="Integer offset added to default proxy ports (e.g. 10000 for remote SSH sessions). "
+             "Written to the shell profile so it persists across sessions.",
+    )
+    parser.add_argument(
         "--uninstall",
         action="store_true",
         help="Remove ~/.cli-proxy/, shims, and profile loader lines",
@@ -509,6 +515,106 @@ def start_proxies_after_install() -> None:
         except Exception:
             pass
 
+
+def install_claude_code(system: str) -> None:
+    """Install Claude Code CLI if not already present.
+
+    Linux/macOS : official installer (curl ... | bash) — standalone Bun binary.
+    Windows     : npm install (Node.js runtime) — avoids Bun ConPTY crash in
+                  IDE-embedded terminals (VSCode, Antigravity, etc.).
+    """
+    import subprocess
+
+    if shutil.which("claude"):
+        print("Claude Code already installed -- skipping.")
+        return
+
+    if system == "linux":
+        print("Claude Code not found. Installing via official installer...")
+        try:
+            result = subprocess.run(
+                ["bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash"],
+                check=False,
+            )
+            if result.returncode != 0:
+                print("Warning: Claude Code installation may have failed.")
+                print("Please install manually: https://claude.ai/download")
+            else:
+                print("Claude Code installation completed.")
+        except Exception as exc:
+            print(f"Warning: failed to run Claude Code installer: {exc}")
+            print("Please install manually: https://claude.ai/download")
+        return
+
+    # Windows — npm install (Node.js runtime, no Bun crash)
+    npm_bin = shutil.which("npm")
+    if not npm_bin:
+        print("Warning: npm not found. Cannot install Claude Code automatically.")
+        print("Please install Node.js (https://nodejs.org/) then run:")
+        print("  npm install -g @anthropic-ai/claude-code")
+        return
+
+    print("Claude Code not found. Installing via npm (Node.js runtime)...")
+    try:
+        result = subprocess.run(
+            [npm_bin, "install", "-g", "@anthropic-ai/claude-code"],
+            check=False,
+        )
+        if result.returncode != 0:
+            print("Warning: Claude Code npm installation may have failed.")
+            print("Please install manually: npm install -g @anthropic-ai/claude-code")
+        else:
+            print("Claude Code installation completed (npm).")
+    except Exception as exc:
+        print(f"Warning: failed to install Claude Code via npm: {exc}")
+        print("Please install manually: npm install -g @anthropic-ai/claude-code")
+
+
+def apply_port_offset(system: str, port_offset: str) -> None:
+    """Persist CC_PROXY_LOCAL_PORT_OFFSET to the appropriate shell profile.
+
+    Linux/macOS : appends export line to ~/.bashrc and ~/.zshrc (if they exist).
+    Windows     : appends env var line to the PowerShell profile ($PROFILE).
+    """
+    import subprocess
+
+    offset_line_sh = f"export CC_PROXY_LOCAL_PORT_OFFSET={port_offset}"
+    offset_marker = "CC_PROXY_LOCAL_PORT_OFFSET"
+
+    if system == "linux":
+        for rc_name in (".bashrc", ".zshrc"):
+            rc_path = Path.home() / rc_name
+            if not rc_path.exists():
+                continue
+            content = rc_path.read_text(encoding="utf-8", errors="replace")
+            if offset_marker in content:
+                print(f"Port offset already configured in ~/{rc_name}")
+                continue
+            with rc_path.open("a", encoding="utf-8") as f:
+                f.write(f"\n# Added by cli-proxy installer\n{offset_line_sh}\n")
+            print(f"Saved port offset to ~/{rc_name}")
+        return
+
+    # Windows — write to $PROFILE
+    offset_line_ps = f"$env:CC_PROXY_LOCAL_PORT_OFFSET = {port_offset}"
+    ps_cmd = (
+        "$p = $PROFILE;"
+        "if (-Not (Test-Path $p)) {{ New-Item -Path $p -Type File -Force | Out-Null }};"
+        "$c = Get-Content $p -Raw -ErrorAction SilentlyContinue;"
+        f"if (-not $c -or -not $c.Contains('{offset_marker}')) {{"
+        f"    Out-File -FilePath $p -Append -Encoding utf8 -InputObject '`n# Added by cli-proxy installer';"
+        f"    Out-File -FilePath $p -Append -Encoding utf8 -InputObject '{offset_line_ps}';"
+        "    Write-Host 'Saved port offset to profile';"
+        "}} else {{ Write-Host 'Port offset already configured in profile' }}"
+    )
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            check=False,
+        )
+    except Exception as exc:
+        print(f"Warning: could not write port offset to PowerShell profile: {exc}")
+
 def main() -> None:
     args = parse_args()
 
@@ -531,6 +637,8 @@ def main() -> None:
 
     print(f"Detected platform: {platform_key}")
 
+    install_claude_code(system)
+
     stop_existing_proxies()
 
     install_core_files(source_mode, args.repo, args.tag, local_root)
@@ -539,6 +647,10 @@ def main() -> None:
 
     write_install_metadata(args.repo, args.tag, platform_key, source_mode, local_root)
     setup_profile()
+
+    if args.port_offset:
+        apply_port_offset(system, args.port_offset)
+
     print("\nInstallation complete!")
     start_proxies_after_install()
 
