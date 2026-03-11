@@ -185,8 +185,11 @@ http://127.0.0.1:<provider-port>/management.html
 - Repository-managed binaries are stored under `CLIProxyAPI/<os>/<arch>/` and `core/cc_proxy.py` resolves host-appropriate paths automatically.
 
 ## Build / lint / test reality
-- No repo-local build/lint/test pipeline was found (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Makefile`, and `README.md` are absent).
-- For this repo, practical verification is operational smoke testing via `cc-*`, `cc-proxy-status`, and `/v1/models` checks.
+- **Unit tests**: `tests/` directory contains stdlib `unittest` tests covering all core modules. Run with `py tests/run_tests.py -v` (or `python3 tests/run_tests.py -v` on Linux). Tests require no external dependencies.
+- **Smoke tests**: `tests/test_smoke.py` validates binary presence, version output, login flags, and module imports. Requires the CLIProxyAPI binary.
+- **Test runner**: `tests/run_tests.py` supports `--unit` (no binary needed), `--smoke` (binary needed), and `-v` flags. Returns exit code 0/1 for CI integration.
+- **Deployment guide**: `docs/testing-and-deployment.md` documents the full testing and deployment procedure.
+- Practical runtime verification is operational smoke testing via `cc-*`, `cc-proxy-status`, and `/v1/models` checks (see verification policy below).
 
 ## External instruction files check
 - No existing `AGENTS.md` was found before creation.
