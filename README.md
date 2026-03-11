@@ -225,6 +225,23 @@ gemini 대시보드:        http://localhost:28420/management.html
 - 설치 후 `~/.cli-proxy/.installed-tag`와 `~/.cli-proxy/.install-meta.json`에 설치 tag/repo/platform/source_mode 정보를 기록해 역추적할 수 있습니다.
 - 실행은 `~/.cli-proxy` wrapper에서 수행하고, 개발 반영은 local source install로 동기화하는 방식을 권장합니다.
 
+## 테스트
+
+`tests/` 디렉토리에 유닛/스모크 테스트가 구현되어 있으며, stdlib `unittest` 기반으로 외부 의존성 없이 실행 가능합니다.
+
+```powershell
+# 전체 테스트 (101개)
+py tests\run_tests.py -v
+
+# 유닛 테스트만 (바이너리 불필요)
+py tests\run_tests.py --unit -v
+
+# 스모크 테스트만 (바이너리 필요)
+py tests\run_tests.py --smoke -v
+```
+
+바이너리 업데이트 또는 코드 변경 시 반드시 테스트를 실행하여 호환성을 검증합니다. 자세한 테스트 절차 및 배포 가이드는 [`docs/testing-and-deployment.md`](docs/testing-and-deployment.md)를 참고하세요.
+
 ## 참고 링크
 
 - CLIProxyAPI repository: https://github.com/router-for-me/CLIProxyAPI

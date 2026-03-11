@@ -65,11 +65,21 @@ def invoke_claude(provider, opus, sonnet, haiku, claude_args):
     env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = sonnet
     env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = haiku
 
-    claude_bin = shutil.which("claude") or "claude"
+    claude_bin = shutil.which("claude")
+    if not claude_bin:
+        print(
+            "[cc-proxy] ERROR: 'claude' CLI not found in PATH.\n"
+            "[cc-proxy] Install Claude Code: https://claude.ai/download\n"
+            "[cc-proxy] After installation, restart your shell and try again.",
+            file=sys.stderr,
+        )
+        return 1
+
     sys.stdout.flush()
     sys.stderr.flush()
     result = subprocess.run([claude_bin] + claude_args, env=env)
     return result.returncode
+
 
 
 def install_profile(base_dir, hint_only=False):
