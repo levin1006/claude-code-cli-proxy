@@ -605,7 +605,7 @@ def _print_status_dashboard(base_dir, provider, status, W,
     _C_YELLOW = "\033[33m"
     _C_TEAL   = "\033[38;5;73m"   # muted blue-green for input
     _C_PURPLE = "\033[38;5;139m" # muted purple for output
-    _DOT      = "  \u00b7  "
+    _DOT      = " \u00b7 "
     _DIM_DOT  = _C_DIM + _DOT + _C_RESET
 
     def _p(text, width):
@@ -639,10 +639,10 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line("", W))
         print(_box_line("  Models:", W))
 
-        W_MODEL = 24
-        W_MREQ  = 5
-        W_MTOK  = 19
-        W_MLAST = 19
+        W_MODEL = 22
+        W_MREQ  = 3
+        W_MTOK  = 15
+        W_MLAST = 15
 
         h_model = _p(_C_BOLD + "model" + _C_RESET, W_MODEL)
         h_mreq  = _p(_C_BOLD + "req" + _C_RESET, W_MREQ)
@@ -675,10 +675,10 @@ def _print_status_dashboard(base_dir, provider, status, W,
         print(_box_line("", W))
         print(_box_line("  Per-account:", W))
 
-        W_ACCT = 24
-        W_REQ  = 5
-        W_TOT  = 19
-        W_LAST = 19
+        W_ACCT = 22
+        W_REQ  = 3
+        W_TOT  = 15
+        W_LAST = 15
 
         # Header
         h_acct = _p(_C_BOLD + "account" + _C_RESET, W_ACCT)
