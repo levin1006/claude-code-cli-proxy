@@ -57,6 +57,80 @@ def run_auth(base_dir, provider):
     return result.returncode == 0
 
 
+def _find_claude_bin():
+    """Locate the 'claude' executable.
+
+    Falls back to reading the Windows User PATH from the registry when the
+    current process PATH is incomplete (e.g. IDE-embedded terminals that do
+    not inherit the full user environment).
+    """
+    # Fast path: current process PATH
+    found = shutil.which("claude")
+    if found:
+        return found
+
+    if not IS_WINDOWS:
+        return None
+
+    # Slow path: read User PATH from registry and search each entry
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Environment",
+            access=winreg.KEY_READ,
+        )
+        user_path_val, _ = winreg.QueryValueEx(key, "PATH")
+        winreg.CloseKey(key)
+    except Exception:
+        return None
+
+    from pathlib import Path as _Path
+    for entry in user_path_val.split(";"):
+        entry = entry.strip()
+        if not entry:
+            continue
+        for candidate in ("claude.cmd", "claude.exe", "claude"):
+            p = _Path(entry) / candidate
+            if p.is_file():
+                return str(p)
+
+    return None
+
+
+def _enrich_env_with_user_path(env):
+    """On Windows, merge the User PATH from the registry into *env*.
+
+    IDE-embedded terminals (e.g. Antigravity) may inherit only the System
+    PATH, leaving the User PATH entries absent.  Bun (which powers claude.exe)
+    can panic with "invalid enum value" when launched in such incomplete
+    environments because it can't find expected Windows DLLs or helpers.
+    Merging the User PATH before exec gives claude.exe a complete environment.
+    """
+    if not IS_WINDOWS:
+        return
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Environment",
+            access=winreg.KEY_READ,
+        )
+        user_path_val, _ = winreg.QueryValueEx(key, "PATH")
+        winreg.CloseKey(key)
+    except Exception:
+        return
+
+    existing = env.get("PATH", "")
+    existing_entries = set(p.strip().lower() for p in existing.split(";") if p.strip())
+    extra = [
+        p for p in user_path_val.split(";")
+        if p.strip() and p.strip().lower() not in existing_entries
+    ]
+    if extra:
+        env["PATH"] = existing + ";" + ";".join(extra)
+
+
 def invoke_claude(provider, opus, sonnet, haiku, claude_args):
     env = os.environ.copy()
     env["ANTHROPIC_BASE_URL"] = "http://{}:{}".format(HOST, PORTS[provider])
@@ -65,7 +139,11 @@ def invoke_claude(provider, opus, sonnet, haiku, claude_args):
     env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = sonnet
     env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = haiku
 
-    claude_bin = shutil.which("claude")
+    # Ensure claude.exe (Bun) gets the full user environment even in
+    # IDE-embedded terminals that only inherit the system PATH.
+    _enrich_env_with_user_path(env)
+
+    claude_bin = _find_claude_bin()
     if not claude_bin:
         print(
             "[cc-proxy] ERROR: 'claude' CLI not found in PATH.\n"

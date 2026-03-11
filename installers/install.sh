@@ -1,162 +1,62 @@
 #!/bin/bash
+# install.sh — Linux thin wrapper for the cli-proxy installer.
+#
+# Usage (recommended — remote):
+#   curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/installers/install.sh | bash
+#   curl -fsSL <URL>/install.sh | bash -- --port-offset 10000
+#
+# Usage (local, from repo root):
+#   bash installers/install.sh [--source local] [--port-offset 10000] [...]
+#
+# All arguments are forwarded to installers/install.py unchanged.
+# All installation logic (Claude Code install, port-offset, etc.) lives in install.py.
+
 set -e
 
-echo "Starting cli-proxy-api installation..."
-
-# Check requirements
-if ! command -v curl &> /dev/null; then
-    echo "Error: curl is required for installation."
-    exit 1
-fi
-
+# ── 1. Check requirements ─────────────────────────────────────────────────────
 if ! command -v python3 &> /dev/null; then
     echo "Error: python3 is required for installation."
     exit 1
 fi
 
-# Ensure Claude Code is available for cc-* commands
-if ! command -v claude &> /dev/null; then
-    echo "Claude Code not found. Installing Claude Code..."
-    if curl -fsSL https://claude.ai/install.sh | bash; then
-        echo "Claude Code installation completed."
-    else
-        echo "Error: failed to install Claude Code."
-        exit 1
-    fi
-
-    # Refresh common user-level bin paths for current shell session
-    export PATH="$HOME/.local/bin:$HOME/.claude/bin:$HOME/bin:$PATH"
-fi
-
-if ! command -v claude &> /dev/null; then
-    echo "Error: 'claude' command is still unavailable after install."
-    echo "Please restart your shell and rerun this installer."
+if ! command -v curl &> /dev/null; then
+    echo "Error: curl is required to download install.py."
     exit 1
 fi
 
+# ── 2. Resolve install.py (local tree or remote download) ─────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
+LOCAL_INSTALL="$SCRIPT_DIR/install.py"
+TEMP_INSTALL="/tmp/install_cc_proxy_$$.py"
+
 REPO="${CC_PROXY_INSTALL_REPO:-levin1006/claude-code-cli-proxy}"
-REQUESTED_TAG="${CC_PROXY_INSTALL_TAG:-main}"
-PORT_OFFSET=""
-REMOTE_MODE=0
+TAG="${CC_PROXY_INSTALL_TAG:-main}"
 
-SOURCE_MODE=""
-LOCAL_PATH=""
-
-# Parse optional args: --tag vX.Y.Z --repo owner/name --source <remote|local|auto> --local-path <path> --remote --port-offset N
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --tag)
-            if [[ $# -lt 2 ]]; then
-                echo "Error: --tag requires a value"
-                exit 1
-            fi
-            REQUESTED_TAG="$2"
-            shift 2
-            ;;
-        --repo)
-            if [[ $# -lt 2 ]]; then
-                echo "Error: --repo requires a value"
-                exit 1
-            fi
-            REPO="$2"
-            shift 2
-            ;;
-        --remote)
-            REMOTE_MODE=1
-            shift
-            ;;
-        --source)
-            if [[ $# -lt 2 ]]; then
-                echo "Error: --source requires a value"
-                exit 1
-            fi
-            SOURCE_MODE="$2"
-            shift 2
-            ;;
-        --local-path)
-            if [[ $# -lt 2 ]]; then
-                echo "Error: --local-path requires a value"
-                exit 1
-            fi
-            LOCAL_PATH="$2"
-            shift 2
-            ;;
-        --port-offset)
-            if [[ $# -lt 2 ]]; then
-                echo "Error: --port-offset requires a value"
-                exit 1
-            fi
-            PORT_OFFSET="$2"
-            shift 2
-            ;;
-        *)
-            echo "Error: unknown argument '$1'"
-            echo "Usage: install.sh [--tag <tag-or-branch>] [--repo <owner/name>] [--source <remote|local|auto>] [--local-path <path>] [--remote] [--port-offset <number>]"
-            exit 1
-            ;;
-    esac
-done
-
-if [[ -n "$SOURCE_MODE" ]]; then
-    if [[ "$SOURCE_MODE" != "remote" && "$SOURCE_MODE" != "local" && "$SOURCE_MODE" != "auto" ]]; then
-        echo "Error: --source must be one of: remote, local, auto"
-        exit 1
+if [ -f "$LOCAL_INSTALL" ]; then
+    INSTALL_SCRIPT="$LOCAL_INSTALL"
+    echo "Using local install.py: $INSTALL_SCRIPT"
+    PY_ARGS=("$@")
+else
+    # Running via curl | bash — download install.py
+    INSTALLER_URL="https://raw.githubusercontent.com/${REPO}/${TAG}/installers/install.py"
+    echo "Downloading install.py from $INSTALLER_URL ..."
+    curl -fsSL "$INSTALLER_URL" -o "$TEMP_INSTALL"
+    INSTALL_SCRIPT="$TEMP_INSTALL"
+    # Inject --source remote unless caller already specified --source
+    if [[ " $* " != *" --source "* ]]; then
+        PY_ARGS=("--repo" "$REPO" --tag "$TAG" "--source" "remote" "$@")
+    else
+        PY_ARGS=("--repo" "$REPO" --tag "$TAG" "$@")
     fi
 fi
 
-if [[ -z "$PORT_OFFSET" && "$REMOTE_MODE" -eq 1 ]]; then
-    PORT_OFFSET="10000"
+# ── 3. Run install.py ─────────────────────────────────────────────────────────
+python3 "$INSTALL_SCRIPT" "${PY_ARGS[@]}"
+EXIT_CODE=$?
+
+# Cleanup temp file if used
+if [ "$INSTALL_SCRIPT" = "$TEMP_INSTALL" ] && [ -f "$TEMP_INSTALL" ]; then
+    rm -f "$TEMP_INSTALL"
 fi
 
-if [[ -n "$PORT_OFFSET" ]]; then
-    if ! [[ "$PORT_OFFSET" =~ ^-?[0-9]+$ ]]; then
-        echo "Error: --port-offset must be an integer"
-        exit 1
-    fi
-fi
-
-echo "Using repository ref: $REQUESTED_TAG"
-
-INSTALLER_URL="https://raw.githubusercontent.com/${REPO}/${REQUESTED_TAG}/installers/install.py"
-TEMP_SCRIPT="/tmp/install_cc_proxy.py"
-
-echo "Downloading core installation script from repository ref..."
-curl -fsSL "$INSTALLER_URL" -o "$TEMP_SCRIPT"
-
-echo "Executing core installation script..."
-if [[ -z "$SOURCE_MODE" ]]; then
-    SOURCE_MODE="remote"
-fi
-PY_ARGS=(--repo "$REPO" --tag "$REQUESTED_TAG" --source "$SOURCE_MODE")
-if [[ -n "$LOCAL_PATH" ]]; then
-    PY_ARGS+=(--local-path "$LOCAL_PATH")
-fi
-python3 "$TEMP_SCRIPT" "${PY_ARGS[@]}"
-
-if [[ -n "$PORT_OFFSET" ]]; then
-    OFFSET_LINE="export CC_PROXY_LOCAL_PORT_OFFSET=$PORT_OFFSET"
-    export CC_PROXY_LOCAL_PORT_OFFSET="$PORT_OFFSET"
-    echo "Configured port offset for this session: $PORT_OFFSET"
-
-    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-        if [[ -f "$rc" ]]; then
-            if grep -qxF "$OFFSET_LINE" "$rc" 2>/dev/null; then
-                echo "Port offset already configured in $rc"
-            else
-                printf "\n# Added by cli-proxy installer\n%s\n" "$OFFSET_LINE" >> "$rc"
-                echo "Saved port offset to $rc"
-            fi
-        fi
-    done
-fi
-
-# Cleanup
-rm -f "$TEMP_SCRIPT"
-
-# Auto-load into current session
-PROXY_SCRIPT="$HOME/.cli-proxy/shell/bash/cc-proxy.sh"
-if [ -f "$PROXY_SCRIPT" ]; then
-    echo -e "\n\033[0;36mAuto-loading CLIProxyAPI into the current bash session...\033[0m"
-    source "$PROXY_SCRIPT"
-    echo -e "\033[0;32mDone! You can now use cc, cc-proxy-start-all, etc.\033[0m"
-fi
+exit $EXIT_CODE
