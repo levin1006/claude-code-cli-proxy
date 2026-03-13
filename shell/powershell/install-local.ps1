@@ -40,4 +40,11 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "[install-local] Failed." -ForegroundColor Red
 } else {
     Write-Host "[install-local] Done." -ForegroundColor Green
+    # Reload helpers into the current session so new functions (e.g. cc-proxy-update)
+    # are available immediately without restarting the terminal.
+    $installedPs1 = Join-Path $HOME ".cli-proxy\shell\powershell\cc-proxy.ps1"
+    if (Test-Path $installedPs1) {
+        . $installedPs1
+        Write-Host "[install-local] Session reloaded — new commands available." -ForegroundColor Cyan
+    }
 }

@@ -34,6 +34,7 @@ UNIT_MODULES = [
     "test_proxy",
     "test_api",
     "test_commands",
+    "test_updater",
 ]
 
 SMOKE_MODULES = [

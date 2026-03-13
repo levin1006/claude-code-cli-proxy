@@ -17,6 +17,7 @@ Usage:
   python3 core/cc_proxy.py set-secret <secret>
   python3 core/cc_proxy.py usage-clear [provider]
   python3 core/cc_proxy.py install-profile [--hint-only]
+  python3 core/cc_proxy.py update [--force]
   python3 core/cc_proxy.py clean [-- claude-args...]
 
 Module structure (core/):
@@ -333,6 +334,11 @@ def main():
         claude_bin = _shutil.which("claude") or "claude"
         result = subprocess.run([claude_bin] + claude_args, env=env)
         return result.returncode
+
+    elif cmd == "update":
+        from updater import cmd_update
+        force = "--force" in args[1:]
+        return cmd_update(base_dir, force=force)
 
     else:
         print("[cc-proxy] Unknown command: {}".format(cmd), file=sys.stderr)

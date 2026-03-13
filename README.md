@@ -117,7 +117,25 @@ cc-proxy-status    # proxy 상태 확인
 cc-proxy-links     # management URL 및 통합 대시보드 URL 출력 (URL 클립보드 자동 복사)
 cc-proxy-stop      # proxy 중지(명시적으로 종료할 때만 사용)
 cc-proxy-ui        # 인터랙티브 TUI (계정 on/off, quota, 상태 통합 확인)
+cc-proxy-update    # 최신 버전으로 업데이트
 ```
+
+### 업데이트
+
+```
+cc-proxy-update           # 업데이트 확인 및 적용
+cc-proxy-update --force   # 미커밋 변경이 있어도 강제 적용
+```
+
+GitHub `main` 브랜치 최신 commit SHA와 현재 설치된 commit SHA를 비교해 업데이트를 결정합니다.
+
+| 모드 | 조건 | 동작 |
+|------|------|------|
+| **Local** | 로컬 저장소가 메타데이터에 등록된 경우 | `git pull --ff-only` → `install.py --source local` |
+| **Remote** | 로컬 저장소 없음 (순수 다운로드 설치) | `install.py --source remote` (GitHub에서 직접 다운로드) |
+
+> 현재 모드는 `~/.cli-proxy/.install-meta.json`의 `local_source_root` 필드로 구분됩니다.
+> dirty working tree가 있을 경우 `--force` 없이는 중단됩니다.
 
 ### 토큰(인증) 관리
 
@@ -222,7 +240,7 @@ gemini 대시보드:        http://localhost:28420/management.html
 
 - installer는 source 모드를 지원합니다: `--source remote`(GitHub tag 기준), `--source local`(현재 로컬 트리 복사), `--source auto`(로컬 추론 우선).
 - `installers/install.py`는 `CLIProxyAPI/<os>/<arch>/` 경로에서 플랫폼별 바이너리를 선택해 canonical 실행파일명으로 설치합니다.
-- 설치 후 `~/.cli-proxy/.installed-tag`와 `~/.cli-proxy/.install-meta.json`에 설치 tag/repo/platform/source_mode 정보를 기록해 역추적할 수 있습니다.
+- 설치 후 `~/.cli-proxy/.install-meta.json`에 설치 tag/repo/platform/source_mode/**commit_sha** 정보를 기록합니다. `cc-proxy-update`는 이 SHA를 기준으로 GitHub와 버전을 비교합니다.
 - 실행은 `~/.cli-proxy` wrapper에서 수행하고, 개발 반영은 local source install로 동기화하는 방식을 권장합니다.
 
 ## 테스트

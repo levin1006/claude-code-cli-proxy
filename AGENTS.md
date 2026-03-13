@@ -13,6 +13,7 @@ This file provides guidance to OpenAI (OpenAI.ai/code) when working with code in
   - `CLIProxyAPI/linux/arm64/cli-proxy-api` (Linux arm64 binary)
   - `configs/<provider>/config.yaml` (+ provider credential JSON files)
   - `core/cc_proxy.py` (cross-platform core logic — single source of truth)
+  - `core/updater.py` (self-update logic: GitHub API commit check, git pull, installer invocation)
   - `shell/powershell/cc-proxy.ps1` (Windows thin wrapper, ~50 lines, delegates to Python core)
   - `shell/bash/cc-proxy.sh` (Linux thin wrapper, ~50 lines, delegates to Python core)
   - `docs/OpenAI-cliproxy-guide.md` (Operational background and guide)
@@ -132,6 +133,19 @@ Use `cc-proxy-start-all` to launch all proxies in the background at once (useful
 Use `cc-proxy-stop` when you want an explicit shutdown.
 Use `cc-proxy-links` to print management URLs and the generated combined dashboard `http://` link.
 
+### Update to latest version (both platforms)
+```
+cc-proxy-update
+cc-proxy-update --force
+```
+Compares installed commit SHA against the latest GitHub `main` branch. If an update is available:
+- **Local repo mode** (`local_source_root` in `.install-meta.json`): runs `git pull --ff-only` then `install.py --source local`.
+- **Remote mode** (no local repo): runs `install.py --source remote`.
+
+`--force` bypasses the dirty working-tree guard (uncommitted local changes).
+
+The installed commit SHA is recorded in `~/.cli-proxy/.install-meta.json` as `commit_sha` at install time.
+
 ### Health/model checks (single-provider smoke test)
 Use `curl` (on Linux) or `curl.exe` (on Windows, not PowerShell `curl` alias):
 ```
@@ -183,6 +197,22 @@ http://127.0.0.1:<provider-port>/management.html
 - If adding new providers/ports, update `PORTS` and `PRESETS` in `core/cc_proxy.py`; add entrypoint functions to both shell wrappers.
 - `routing.strategy` is set to `round-robin` in provider configs.
 - Repository-managed binaries are stored under `CLIProxyAPI/<os>/<arch>/` and `core/cc_proxy.py` resolves host-appropriate paths automatically.
+- **If adding a new `core/*.py` module**: add it to `CORE_FILES` in `installers/install.py` so it is deployed on install/sync.
+
+## Install UX consistency rule
+**All install scripts MUST reload the current shell session automatically on success** so users do not need to restart their terminal or manually dot-source.
+
+| Script | Current behavior |
+|--------|-----------------|
+| `shell/powershell/install-local.ps1` | ✅ dot-sources `~/.cli-proxy/shell/powershell/cc-proxy.ps1` at end |
+| `shell/powershell/install-remote.ps1` | ✅ dot-sources `~/.cli-proxy/shell/powershell/cc-proxy.ps1` at end |
+| `shell/bash/install-local.sh` | ⚠️ Cannot auto-source (subshell limitation) — prints `source` hint |
+| `shell/bash/install-remote.sh` | ⚠️ Cannot auto-source (subshell limitation) — prints `source` hint |
+
+Rules for future changes:
+- **Windows (PowerShell)**: every install script MUST dot-source the installed `cc-proxy.ps1` at the end of a successful install. Print `[install-*] Session reloaded — new commands available.` in Cyan.
+- **Linux (Bash)**: auto-source is structurally impossible in a subshell. Every install script MUST print a clear one-liner hint: `source "~/.cli-proxy/shell/bash/cc-proxy.sh"`. No other workaround is needed.
+- Never silently skip session reload on Windows; it must be unconditional on success.
 
 ## Build / lint / test reality
 - **Unit tests**: `tests/` directory contains stdlib `unittest` tests covering all core modules. Run with `py tests/run_tests.py -v` (or `python3 tests/run_tests.py -v` on Linux). Tests require no external dependencies.
@@ -193,4 +223,4 @@ http://127.0.0.1:<provider-port>/management.html
 
 ## External instruction files check
 - No existing `AGENTS.md` was found before creation.
-- No `.cursorrules` / `.cursor/rules/*` / `.github/copilot-instructions.md` were found in this repo at scan time.
+- No `.cursorrules` / `.cursor/rules/*` / `.github/copilot-instructions.md` were found in this repo at scan time.

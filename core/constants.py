@@ -35,6 +35,7 @@ LOGIN_FLAGS = {
 
 TOKEN_DIR_ENV = "CC_PROXY_TOKEN_DIR"
 TOKEN_DIR_META_FILE = ".token-dir"
+INSTALL_META_JSON_NAME = ".install-meta.json"
 
 # Schema versions
 QUOTA_CACHE_TTL = 60  # seconds
