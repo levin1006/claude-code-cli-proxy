@@ -53,6 +53,7 @@ CORE_FILES = {
     "core/display.py": "core/display.py",
     "core/tui.py": "core/tui.py",
     "core/commands.py": "core/commands.py",
+    "core/updater.py": "core/updater.py",
 }
 
 BINARY_PATHS = {
@@ -348,6 +349,42 @@ def setup_profile() -> None:
     print("Or restart your terminal.")
 
 
+def _resolve_commit_sha(
+    source_mode: str,
+    local_root: Optional[Path],
+    repo: str,
+    tag: str,
+) -> str:
+    """Best-effort commit SHA resolution for install metadata."""
+    import subprocess as _sp
+    if source_mode == "local" and local_root:
+        try:
+            result = _sp.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(local_root),
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+    # Remote mode fallback: query GitHub API
+    try:
+        api_url = f"https://api.github.com/repos/{repo}/commits/{tag}"
+        req = urllib.request.Request(api_url, headers={
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "cc-proxy-installer/1.0",
+        })
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            sha = data.get("sha", "")
+            if sha:
+                return sha
+    except Exception:
+        pass
+    return "unknown"
+
+
 def write_install_metadata(
     repo: str,
     tag: str,
@@ -356,6 +393,7 @@ def write_install_metadata(
     local_root: Optional[Path],
 ) -> None:
     now_iso = datetime.now(timezone.utc).isoformat()
+    commit_sha = _resolve_commit_sha(source_mode, local_root, repo, tag)
 
     meta: Dict[str, Any] = {
         "repo": repo,
@@ -365,6 +403,7 @@ def write_install_metadata(
         "install_dir": str(INSTALL_DIR),
         "source_mode": source_mode,
         "binary_source": "local-tree-copy" if source_mode == "local" else "repo-tag-raw",
+        "commit_sha": commit_sha,
     }
     if local_root is not None:
         meta["local_source_root"] = str(local_root)
@@ -372,6 +411,7 @@ def write_install_metadata(
     INSTALL_META_JSON.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     INSTALLED_TAG_FILE.write_text(f"{tag}\n", encoding="utf-8")
     print(f"Wrote install metadata: {INSTALL_META_JSON}")
+    print(f"Committed SHA: {commit_sha}")
     print(f"Wrote installed tag file: {INSTALLED_TAG_FILE}")
 
 

@@ -25,7 +25,10 @@ fi
 
 echo "[install-local] Done."
 
+# NOTE: Bash runs this script in a subshell, so we cannot auto-source the
+# helpers into the caller's shell. The user must run the line below once.
 PROXY_SCRIPT="$HOME/.cli-proxy/shell/bash/cc-proxy.sh"
 if [ -f "$PROXY_SCRIPT" ]; then
-    echo "Run: source $PROXY_SCRIPT   (to activate in current shell)"
+    echo "[install-local] To activate new commands in this shell, run:"
+    echo "  source \"$PROXY_SCRIPT\""
 fi
