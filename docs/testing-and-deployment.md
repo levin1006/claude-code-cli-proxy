@@ -123,7 +123,6 @@ cc-proxy-start-all            # 모든 프록시 시작
 cc-proxy-status               # running/healthy 확인
 curl.exe http://127.0.0.1:18417/         # health check
 curl.exe http://127.0.0.1:18417/v1/models  # 모델 목록 조회
-cc-proxy-links                # management URL 출력
 cc-proxy-stop                 # 전체 중지
 cc-proxy-status               # stopped 확인
 ```

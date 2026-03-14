@@ -169,11 +169,6 @@ def install_profile(base_dir, hint_only=False):
 
 def _install_profile_linux(base_dir, hint_only):
     src_line = 'source "{}/shell/bash/cc-proxy.sh"'.format(base_dir)
-    ssh_offset_marker = "CC_PROXY_LOCAL_PORT_OFFSET"
-    ssh_offset_block = (
-        "# cc-proxy: apply local port offset when connecting via SSH\n"
-        '[ -n "${SSH_CONNECTION}" ] && export CC_PROXY_LOCAL_PORT_OFFSET=10000\n'
-    )
 
     rcfiles = []
     for name in (".bashrc", ".zshrc"):
@@ -185,9 +180,8 @@ def _install_profile_linux(base_dir, hint_only):
         rcfiles = [Path.home() / ".bashrc"]
 
     missing_src = [p for p in rcfiles if src_line not in p.read_text(errors="replace")]
-    missing_offset = [p for p in rcfiles if ssh_offset_marker not in p.read_text(errors="replace")]
 
-    if not missing_src and not missing_offset:
+    if not missing_src:
         if not hint_only:
             print("[cc-proxy] Shell profile already contains cc-proxy loader.")
         return
@@ -202,22 +196,12 @@ def _install_profile_linux(base_dir, hint_only):
             f.write("\n{}\n".format(src_line))
         print("[cc-proxy] Added loader to {}.".format(rc))
 
-    for rc in missing_offset:
-        with rc.open("a") as f:
-            f.write("\n{}".format(ssh_offset_block))
-        print("[cc-proxy] Added SSH port offset config to {}.".format(rc))
-
     print("[cc-proxy] New terminals will auto-load helpers.")
 
 
 def _install_profile_windows(base_dir, hint_only):
     script_path = base_dir / "shell" / "powershell" / "cc-proxy.ps1"
     profile_line = '. "{}"'.format(script_path)
-    ssh_offset_marker = "CC_PROXY_LOCAL_PORT_OFFSET"
-    ssh_offset_block = (
-        "# cc-proxy: apply local port offset when connecting via SSH\r\n"
-        "if ($env:SSH_CONNECTION) { $env:CC_PROXY_LOCAL_PORT_OFFSET = 10000 }\r\n"
-    )
 
     try:
         res = subprocess.run(
@@ -231,14 +215,13 @@ def _install_profile_windows(base_dir, hint_only):
 
     profile_text = profile_path.read_text(errors="replace") if profile_path.exists() else ""
     already_src = profile_line in profile_text
-    already_offset = ssh_offset_marker in profile_text
 
-    if already_src and already_offset:
+    if already_src:
         if not hint_only:
             print("[cc-proxy] PowerShell profile already contains cc-proxy loader.")
         return
 
-    if hint_only and not already_src:
+    if hint_only:
         print("[cc-proxy] First-time setup detected.")
         try:
             answer = input("[cc-proxy] Add loader to your PowerShell profile now? (Y/N) ")
@@ -250,12 +233,8 @@ def _install_profile_windows(base_dir, hint_only):
 
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     with profile_path.open("a") as f:
-        if not already_src:
-            f.write("\r\n{}\r\n".format(profile_line))
-            print("[cc-proxy] Added loader to {}.".format(profile_path))
-        if not already_offset:
-            f.write("\r\n{}".format(ssh_offset_block))
-            print("[cc-proxy] Added SSH port offset config to {}.".format(profile_path))
+        f.write("\r\n{}\r\n".format(profile_line))
+        print("[cc-proxy] Added loader to {}.".format(profile_path))
 
 
 def cmd_set_secret(base_dir, secret):

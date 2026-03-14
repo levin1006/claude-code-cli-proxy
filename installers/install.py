@@ -255,7 +255,6 @@ def install_binary(
 # non-interactive shells (watch, cron, systemd, etc.)
 SHIM_COMMANDS = [
     ("cc-proxy-status", "status"),
-    ("cc-proxy-links",  "links"),
     ("cc-proxy-start",  "start all"),
     ("cc-proxy-stop",   "stop"),
 ]
@@ -439,15 +438,9 @@ def parse_args() -> argparse.Namespace:
         help="Local repo root for --source local/auto. If omitted, infer from installers/install.py location.",
     )
     parser.add_argument(
-        "--port-offset",
-        default="",
-        help="Integer offset added to default proxy ports (e.g. 10000 for remote SSH sessions). "
-             "Written to the shell profile so it persists across sessions.",
-    )
-    parser.add_argument(
-        "--uninstall",
-        action="store_true",
-        help="Remove ~/.cli-proxy/, shims, and profile loader lines",
+        '--uninstall',
+        action='store_true',
+        help='Remove ~/.cli-proxy/, shims, and profile loader lines',
     )
     return parser.parse_args()
 
@@ -610,51 +603,6 @@ def install_claude_code(system: str) -> None:
         print("Please install manually: npm install -g @anthropic-ai/claude-code")
 
 
-def apply_port_offset(system: str, port_offset: str) -> None:
-    """Persist CC_PROXY_LOCAL_PORT_OFFSET to the appropriate shell profile.
-
-    Linux/macOS : appends export line to ~/.bashrc and ~/.zshrc (if they exist).
-    Windows     : appends env var line to the PowerShell profile ($PROFILE).
-    """
-    import subprocess
-
-    offset_line_sh = f"export CC_PROXY_LOCAL_PORT_OFFSET={port_offset}"
-    offset_marker = "CC_PROXY_LOCAL_PORT_OFFSET"
-
-    if system == "linux":
-        for rc_name in (".bashrc", ".zshrc"):
-            rc_path = Path.home() / rc_name
-            if not rc_path.exists():
-                continue
-            content = rc_path.read_text(encoding="utf-8", errors="replace")
-            if offset_marker in content:
-                print(f"Port offset already configured in ~/{rc_name}")
-                continue
-            with rc_path.open("a", encoding="utf-8") as f:
-                f.write(f"\n# Added by cli-proxy installer\n{offset_line_sh}\n")
-            print(f"Saved port offset to ~/{rc_name}")
-        return
-
-    # Windows — write to $PROFILE
-    offset_line_ps = f"$env:CC_PROXY_LOCAL_PORT_OFFSET = {port_offset}"
-    ps_cmd = (
-        "$p = $PROFILE;"
-        "if (-Not (Test-Path $p)) {{ New-Item -Path $p -Type File -Force | Out-Null }};"
-        "$c = Get-Content $p -Raw -ErrorAction SilentlyContinue;"
-        f"if (-not $c -or -not $c.Contains('{offset_marker}')) {{"
-        f"    Out-File -FilePath $p -Append -Encoding utf8 -InputObject '`n# Added by cli-proxy installer';"
-        f"    Out-File -FilePath $p -Append -Encoding utf8 -InputObject '{offset_line_ps}';"
-        "    Write-Host 'Saved port offset to profile';"
-        "}} else {{ Write-Host 'Port offset already configured in profile' }}"
-    )
-    try:
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_cmd],
-            check=False,
-        )
-    except Exception as exc:
-        print(f"Warning: could not write port offset to PowerShell profile: {exc}")
-
 def main() -> None:
     args = parse_args()
 
@@ -687,9 +635,6 @@ def main() -> None:
 
     write_install_metadata(args.repo, args.tag, platform_key, source_mode, local_root)
     setup_profile()
-
-    if args.port_offset:
-        apply_port_offset(system, args.port_offset)
 
     print("\nInstallation complete!")
     start_proxies_after_install()

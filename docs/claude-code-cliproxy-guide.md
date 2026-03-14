@@ -108,14 +108,13 @@ cc-ag-gemini       # Antigravity (Gemini 모델 계열 매핑)
 ```
 
 ### 3.2 프로세스 모니터링 및 전체 제어
-4개의 프록시를 일괄로 켜고, 링크를 통해 모니터링할 수 있습니다.
+4개의 프록시를 일괄로 켜고, cc-proxy-ui를 통해 모니터링할 수 있습니다.
 
 ```bash
 cc-proxy-start-all        # 4개의 프록시를 모두 백그라운드에서 구동
 cc-proxy-status           # 각 프록시의 PID, 구동 및 Health 상태, 토큰 상태 출력
-cc-proxy-links            # 전체 Provider Management 링크 및 통합 대시보드 링크 출력
-cc-proxy-links claude     # 특정 Provider의 링크만 출력
-cc-proxy-stop             # 구동 중인 모든 프록시 프로세스와 대시보드 서버 일괄 종료
+cc-proxy-ui               # 인터랙티브 TUI (계정 on/off, quota, 상태 통합 확인)
+cc-proxy-stop             # 구동 중인 모든 프록시 프로세스 일괄 종료
 cc-proxy-auth gemini      # 특정 Provider 재인증 (OAuth 브라우저 오픈)
 cc-proxy-token-dir        # 현재 토큰 디렉터리 조회
 cc-proxy-token-dir ~/secure-tokens  # 토큰 디렉터리 변경(저장)
@@ -124,25 +123,8 @@ cc-proxy-token-list claude # 특정 provider 토큰 목록
 cc-proxy-token-delete claude claude-account1.json --yes  # 토큰 삭제
 ```
 
----
 
-## 4. 통합 대시보드 (Management UI)
-
-`cc-proxy-links` 명령어를 사용하면 **http://127.0.0.1:<포트>/cc_proxy_management_dashboard.html** 형태의 **통합 대시보드 링크**가 출력됩니다. (터미널에서 `Ctrl+Click` 지원)
-
-- 통합 대시보드는 4개의 Provider 화면을 2x2 그리드(iframe)로 보여주며, 곧바로 쿼터(Quota) 모니터링 화면으로 진입합니다.
-- 특정 환경(CSP, X-Frame-Options)으로 인해 패널이 빈 화면으로 나오면, 상단의 `Open directly` 링크를 통해 개별 탭으로 직접 열어 관찰할 수 있습니다.
-- 대시보드를 서빙하는 로컬 HTTP 서버는 프로세스에 독립적이며, `cc-proxy-stop` 시 깔끔하게 함께 정리됩니다.
-
-### 확인 가능 지표:
-- Model Name = 요청된 모델 ID
-- Source = 요청 처리에 사용된 Auth 파일(토큰) 식별자
-- Token usage = 컨텍스트 / 캐시 / 출력 사용량
-
----
-
-
-## 5. 토큰 관리 전략
+## 4. 토큰 관리 전략
 
 ### 6.1 공용 토큰 디렉터리 구조
 
