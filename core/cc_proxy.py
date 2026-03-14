@@ -9,7 +9,6 @@ Usage:
   python3 core/cc_proxy.py stop [provider]
   python3 core/cc_proxy.py status [provider ...]
   python3 core/cc_proxy.py ui [provider]
-  python3 core/cc_proxy.py links [provider]
   python3 core/cc_proxy.py auth <provider>
   python3 core/cc_proxy.py token-dir [path|--reset]
   python3 core/cc_proxy.py token-list [provider]
@@ -28,7 +27,7 @@ Module structure (core/):
   api.py        — management API client, secret key resolution
   quota.py      — upstream quota fetching and caching
   usage.py      — usage snapshot and cumulative tracking
-  proxy.py      — proxy lifecycle (start/stop/status), dashboard server
+  proxy.py      — proxy lifecycle (start/stop/status)
   display.py    — ANSI formatting, box drawing, status dashboard rendering
   tui.py        — terminal UI main loop
   commands.py   — auth, invoke, profile install, token/secret commands
@@ -41,7 +40,7 @@ from datetime import datetime
 
 from constants import PORTS, PRESETS, PROVIDERS
 from paths import get_base_dir
-from proxy import cmd_links, get_status, start_proxy, stop_proxy
+from proxy import get_status, start_proxy, stop_proxy
 from config import ensure_tokens
 from tui import _tui_main_loop
 from display import (
@@ -228,16 +227,6 @@ def main():
                 )
             print(_box_bottom(W))
         return 0
-
-    elif cmd == "links":
-        if len(args) > 2:
-            print("[cc-proxy] Usage: links [provider]", file=sys.stderr)
-            return 1
-        provider = args[1] if len(args) > 1 else None
-        if provider and provider not in PROVIDERS:
-            print("[cc-proxy] Invalid provider: {}".format(provider), file=sys.stderr)
-            return 1
-        return cmd_links(base_dir, provider)
 
     elif cmd == "auth":
         if len(args) < 2:

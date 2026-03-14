@@ -15,11 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
 
 from proxy import (
     get_binary_version,
-    get_local_port_offset,
-    get_management_port,
-    get_management_url,
     get_status,
-    render_dashboard_html,
 )
 from constants import PORTS, PROVIDERS
 
@@ -55,41 +51,6 @@ class TestGetBinaryVersion(unittest.TestCase):
             shutil.rmtree(tmp)
 
 
-class TestLocalPortOffset(unittest.TestCase):
-    @patch.dict(os.environ, {"CC_PROXY_LOCAL_PORT_OFFSET": "10000"})
-    def test_env_override(self):
-        self.assertEqual(get_local_port_offset(), 10000)
-
-    @patch.dict(os.environ, {}, clear=False)
-    def test_default_zero(self):
-        os.environ.pop("CC_PROXY_LOCAL_PORT_OFFSET", None)
-        self.assertEqual(get_local_port_offset(), 0)
-
-    @patch.dict(os.environ, {"CC_PROXY_LOCAL_PORT_OFFSET": "invalid"})
-    def test_invalid_returns_zero(self):
-        self.assertEqual(get_local_port_offset(), 0)
-
-
-class TestGetManagementPort(unittest.TestCase):
-    @patch("proxy.get_local_port_offset", return_value=0)
-    def test_no_offset(self, _):
-        for prov in PROVIDERS:
-            self.assertEqual(get_management_port(prov), PORTS[prov])
-
-    @patch("proxy.get_local_port_offset", return_value=10000)
-    def test_with_offset(self, _):
-        self.assertEqual(get_management_port("claude"), PORTS["claude"] + 10000)
-
-
-class TestGetManagementUrl(unittest.TestCase):
-    @patch("proxy.get_local_port_offset", return_value=0)
-    def test_url_format(self, _):
-        url = get_management_url("claude")
-        self.assertIn("127.0.0.1", url)
-        self.assertIn(str(PORTS["claude"]), url)
-        self.assertIn("management.html", url)
-
-
 class TestGetStatus(unittest.TestCase):
     @patch("proxy.check_health", return_value=True)
     @patch("proxy.is_pid_alive", return_value=True)
@@ -118,25 +79,6 @@ class TestGetStatus(unittest.TestCase):
             self.assertFalse(s["healthy"])
         finally:
             shutil.rmtree(tmp)
-
-
-class TestRenderDashboardHtml(unittest.TestCase):
-    @patch("proxy.get_local_port_offset", return_value=0)
-    def test_contains_all_providers(self, _):
-        html = render_dashboard_html()
-        for prov in PROVIDERS:
-            self.assertIn(prov, html)
-
-    @patch("proxy.get_local_port_offset", return_value=0)
-    def test_contains_iframes(self, _):
-        html = render_dashboard_html()
-        self.assertIn("<iframe", html)
-
-    @patch("proxy.get_local_port_offset", return_value=0)
-    def test_valid_html(self, _):
-        html = render_dashboard_html()
-        self.assertIn("<!doctype html>", html)
-        self.assertIn("</html>", html)
 
 
 if __name__ == "__main__":

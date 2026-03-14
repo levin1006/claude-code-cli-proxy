@@ -121,17 +121,15 @@ cc-ag-OpenAI
 cc-ag-gemini
 ```
 
-### Proxy start, status, links, and stop (both platforms)
+### Proxy start, status, and stop (both platforms)
 ```
 cc-proxy-start-all
 cc-proxy-status
-cc-proxy-links [provider]
 cc-proxy-stop
 ```
 `cc-*` commands do not force-stop a healthy running provider proxy; they reuse it and only start if needed.
 Use `cc-proxy-start-all` to launch all proxies in the background at once (useful for monitoring).
 Use `cc-proxy-stop` when you want an explicit shutdown.
-Use `cc-proxy-links` to print management URLs and the generated combined dashboard `http://` link.
 
 ### Update to latest version (both platforms)
 ```
@@ -154,11 +152,6 @@ curl http://127.0.0.1:18417/v1/models
 ```
 Swap port for other providers (`18418`, `18419`, `18420`).
 
-### Management UI
-```text
-http://127.0.0.1:<provider-port>/management.html
-```
-
 ## Verification policy (installed-only runtime)
 - Do not treat repository-source execution as valid runtime verification.
 - Runtime commands must be executed from installed path wrappers only:
@@ -173,7 +166,7 @@ http://127.0.0.1:<provider-port>/management.html
      - Windows: `python installers/install.py --source local`
 2. **Installed runtime check (release gate)**
    - Open a fresh shell and load from `~/.cli-proxy/shell/...`.
-   - Run lifecycle checks: `cc-proxy-start-all` / `cc-proxy-status` / `cc-proxy-links` / `cc-proxy-stop`.
+   - Run lifecycle checks: `cc-proxy-start-all` / `cc-proxy-status` / `cc-proxy-stop`.
    - Re-run smoke checks (`/` and `/v1/models`).
    - Only this track is valid evidence for deployment readiness.
 
@@ -189,8 +182,8 @@ http://127.0.0.1:<provider-port>/management.html
 - Prefer editing `core/cc_proxy.py` for all logic changes. Shell wrappers (`shell/bash/cc-proxy.sh`, `shell/powershell/cc-proxy.ps1`) are thin and rarely need editing.
 - Treat `configs/*/.config.runtime.yaml` as generated artifacts and keep them untracked.
 - Treat `configs/*/.proxy.pid` as runtime state and keep them untracked.
-- Use provider base `config.yaml` as dashboard-connected runtime source of truth.
-- Do not enforce `remote-management.secret-key`; allow dashboard-managed values.
+- Use provider base `config.yaml` as runtime source of truth.
+- Do not enforce `remote-management.secret-key`; allow binary-managed values.
 - For new providers, copy root `config.yaml` as a template and then set provider port.
 - Treat `**/main.log` as runtime log output and keep it untracked.
 - Keep root `config.yaml` tracked as a bootstrap config for issuing new auth tokens near the binary.

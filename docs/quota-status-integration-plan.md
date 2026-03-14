@@ -22,7 +22,7 @@ cc-proxy-status <provider>   # 특정 provider만 (기존 동작 유지)
 ```
 
 - `cc-proxy-check`는 `cc-proxy-status --check`로 대체 (shell alias 유지 가능)
-- `cc-proxy-links`는 그대로 유지 (별도 목적)
+- `cc-proxy-links`는 제거됨 (management dashboard 기능 정리)
 
 ### 출력 레이아웃 (`--quota` 옵션)
 
