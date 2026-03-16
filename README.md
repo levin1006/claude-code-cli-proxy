@@ -24,6 +24,7 @@ Windows PowerShell 및 Linux Bash에서 CLIProxyAPI를 provider별로 분리 실
 - `shell/bash/cc-proxy.sh` (Linux/macOS helper functions)
 - `core/cc_proxy.py` (핵심 로직을 처리하는 공통 파이썬 스크립트)
 - `configs/<provider>/config.yaml` (+ credential JSON)
+- `~/.config/systemd/user/cli-proxy.service` (Linux Autostart) 또는 `cli-proxy-autostart.vbs` (Windows Autostart)
 - `docs/claude-code-cliproxy-windows-guide.md` (Windows 운영 가이드)
 - `docs/claude-code-cliproxy-linux-guide.md` (Linux 운영 가이드)
 - `config.yaml` (루트 샘플/운영용 기본 설정)
@@ -82,9 +83,24 @@ curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/mai
 
 > **주의:** `install-remote`는 GitHub main 브랜치에서 파일을 다운로드합니다. 로컬 변경사항이 덮어씌워지므로 개발 중에는 `install-local`을 사용하세요.
 
+### OS 부팅 시 자동 시작 (Autostart)
+설치 스크립트는 **기본적으로 OS 부팅 시 백그라운드 프록시들이 자동 실행되도록 구성**합니다. 관리자 권한(`sudo`) 없이 사용자 레벨에서 설정됩니다.
+
+- **Linux**: `systemd` User Service (`~/.config/systemd/user/cli-proxy.service`)로 등록 후 실행 (`systemctl --user status cli-proxy.service`로 확인)
+- **Windows**: 시작프로그램 폴더(`shell:startup`) 안에 숨김 창으로 띄우는 VBScript (`cli-proxy-autostart.vbs`) 자동 배치
+- **설정 제외 (Opt-out)**: 
+  자동 시작 없이 온디맨드 방식으로만 사용하고 싶다면 설치 시 `--no-autostart` 플래그를 추가합니다.
+  ```bash
+  python3 installers/install.py --source local --no-autostart
+  ```
+
 ### 제거 (Uninstall)
 
-`--uninstall` 플래그를 동일한 진입점 스크립트에 전달합니다. 프록시 정지 → shim 제거 → 프로필 라인 삭제 → `~/.cli-proxy/` 삭제 순서로 실행됩니다.
+`--uninstall` 플래그를 동일한 진입점 스크립트에 전달합니다. 프록시 정지 → shim 및 OS Autostart 제거 → 프로필 라인 삭제 → `~/.cli-proxy/` 삭제 순서로 실행됩니다.
+
+> 🛡️ **안전 장치 (Safeguard):** 
+> 제거 시 기존에 인증해둔 토큰 파일이 `configs/tokens/` 경로에 존재하면, 토큰 파일을 함께 삭제할지 묻는 프롬프트(`Do you want to delete them? (y/N)`)가 나타납니다.
+> `N`을 입력하거나 엔터를 치면 **토큰 디렉터리를 제외한 모든 파일이 삭제**되어 실수로 계정 인증이 날아가는 것을 방지합니다.
 
 **Windows:**
 ```powershell
