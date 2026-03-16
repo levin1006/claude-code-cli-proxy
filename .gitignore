@@ -4,9 +4,11 @@ configs/*/.config.runtime.yaml
 configs/*/config.yaml
 **/main.log
 
-# Tracked CLIProxyAPI binaries (arch-separated)
-!/CLIProxyAPI/
-!/CLIProxyAPI/**/
+# CLIProxyAPI binary executables are NOT tracked in git.
+# Use `python3 core/binary_updater.py` to download them.
+CLIProxyAPI/linux/amd64/cli-proxy-api
+CLIProxyAPI/linux/arm64/cli-proxy-api
+CLIProxyAPI/windows/amd64/cli-proxy-api.exe
 
 # PID files (Linux process tracking)
 configs/*/.proxy.pid

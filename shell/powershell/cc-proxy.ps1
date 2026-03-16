@@ -72,7 +72,7 @@ function cc-proxy-token-delete { _cc_proxy token-delete @args }
 function cc-proxy-set-secret   { _cc_proxy set-secret   @args }
 function cc-proxy-usage-clear  { _cc_proxy usage-clear  @args }
 function cc-proxy-version      { _cc_proxy version      @args }
-function cc-proxy-update       { _cc_proxy update       @args }
+function cc-proxy-update       { _cc_proxy update        @args }
 function Install-CCProxyProfile { _cc_proxy install-profile }
 
 # Profile hint on first dot-source

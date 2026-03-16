@@ -35,6 +35,7 @@ UNIT_MODULES = [
     "test_api",
     "test_commands",
     "test_updater",
+    "test_binary_updater",
 ]
 
 SMOKE_MODULES = [

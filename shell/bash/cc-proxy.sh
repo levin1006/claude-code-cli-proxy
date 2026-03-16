@@ -52,7 +52,7 @@ cc-proxy-token-list()  { _cc_proxy token-list   "$@"; }
 cc-proxy-token-delete(){ _cc_proxy token-delete "$@"; }
 cc-proxy-set-secret()  { _cc_proxy set-secret   "$@"; }
 cc-proxy-version()     { _cc_proxy version      "$@"; }
-cc-proxy-update()      { _cc_proxy update       "$@"; }
+cc-proxy-update()      { _cc_proxy update        "$@"; }
 cc-proxy-usage-clear() { _cc_proxy usage-clear  "$@"; }
 cc_proxy_install_profile() { _cc_proxy install-profile; }
 
