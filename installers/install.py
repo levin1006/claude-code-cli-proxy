@@ -414,6 +414,76 @@ def write_install_metadata(
     print(f"Wrote installed tag file: {INSTALLED_TAG_FILE}")
 
 
+def setup_autostart(system: str, uninstall: bool = False) -> None:
+    import os
+    if system == "linux":
+        systemd_user_dir = Path.home() / ".config" / "systemd" / "user"
+        service_file = systemd_user_dir / "cli-proxy.service"
+        
+        import subprocess
+        if uninstall:
+            if service_file.exists():
+                subprocess.run(["systemctl", "--user", "stop", "cli-proxy.service"], check=False, capture_output=True)
+                subprocess.run(["systemctl", "--user", "disable", "cli-proxy.service"], check=False, capture_output=True)
+                service_file.unlink()
+                subprocess.run(["systemctl", "--user", "daemon-reload"], check=False, capture_output=True)
+                print(f"Removed Linux systemd autostart: {service_file}")
+            return
+
+        systemd_user_dir.mkdir(parents=True, exist_ok=True)
+        python_exe = sys.executable
+        cc_proxy_py = INSTALL_DIR / "core" / "cc_proxy.py"
+        
+        service_content = f"""[Unit]
+Description=CLIProxy API Service
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart={python_exe} {cc_proxy_py} start all
+ExecStop={python_exe} {cc_proxy_py} stop
+
+[Install]
+WantedBy=default.target
+"""
+        service_file.write_text(service_content, encoding="utf-8")
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False, capture_output=True)
+        subprocess.run(["systemctl", "--user", "enable", "--now", "cli-proxy.service"], check=False, capture_output=True)
+        print(f"Enabled Linux systemd autostart: {service_file}")
+
+    elif system == "windows":
+        appdata = os.environ.get("APPDATA")
+        if not appdata:
+            if not uninstall:
+                print("Warning: APPDATA not found. Cannot configure Windows autostart.")
+            return
+        
+        startup_dir = Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+        vbs_path = startup_dir / "cli-proxy-autostart.vbs"
+        
+        if uninstall:
+            if vbs_path.exists():
+                vbs_path.unlink()
+                print(f"Removed Windows autostart script: {vbs_path}")
+            return
+
+        startup_dir.mkdir(parents=True, exist_ok=True)
+        python_exe = sys.executable
+        cc_proxy_py = INSTALL_DIR / "core" / "cc_proxy.py"
+        
+        if python_exe.lower().endswith("python.exe"):
+            pythonw_exe = python_exe[:-4] + "w.exe"
+            if Path(pythonw_exe).exists():
+                python_exe = pythonw_exe
+
+        vbs_content = f'Set WshShell = CreateObject("WScript.Shell")\n'
+        vbs_content += f'WshShell.Run chr(34) & "{python_exe}" & chr(34) & " " & chr(34) & "{cc_proxy_py}" & chr(34) & " start all", 0, False\n'
+        
+        vbs_path.write_text(vbs_content, encoding="utf-8")
+        print(f"Enabled Windows autostart: {vbs_path}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Install cli-proxy runtime from repository tag or local source")
     parser.add_argument(
@@ -441,6 +511,11 @@ def parse_args() -> argparse.Namespace:
         '--uninstall',
         action='store_true',
         help='Remove ~/.cli-proxy/, shims, and profile loader lines',
+    )
+    parser.add_argument(
+        '--no-autostart',
+        action='store_true',
+        help='Disable OS boot autostart integration (systemd/Startup folder)',
     )
     return parser.parse_args()
 
@@ -512,11 +587,42 @@ def uninstall() -> None:
                 rc_path.write_text(new_content, encoding="utf-8")
                 print(f"Removed loader line from ~/{rc_name}")
 
+    # 3.5 Remove autostart hooks
+    setup_autostart(system, uninstall=True)
+
     # 4. Remove ~/.cli-proxy/ directory
     if INSTALL_DIR.exists():
-        print(f"Removing {INSTALL_DIR} ...")
-        shutil.rmtree(INSTALL_DIR)
-        print("Removed.")
+        tokens_dir = INSTALL_DIR / "configs" / "tokens"
+        keep_tokens = False
+        
+        if tokens_dir.exists() and any(tokens_dir.iterdir()):
+            try:
+                ans = input(f"\n[?] Found existing token files in {tokens_dir}.\nDo you want to delete them? (y/N) [Default: N]: ").strip().lower()
+                if ans != 'y':
+                    keep_tokens = True
+            except (EOFError, KeyboardInterrupt):
+                keep_tokens = True
+
+        if keep_tokens:
+            print(f"Preserving token files at {tokens_dir}...")
+            for item in INSTALL_DIR.iterdir():
+                if item.name == "configs":
+                    for config_item in item.iterdir():
+                        if config_item.name != "tokens":
+                            if config_item.is_dir():
+                                shutil.rmtree(config_item)
+                            else:
+                                config_item.unlink()
+                else:
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
+            print("Removed cli-proxy files, but kept your tokens safe.")
+        else:
+            print(f"Removing {INSTALL_DIR} ...")
+            shutil.rmtree(INSTALL_DIR)
+            print("Removed.")
     else:
         print(f"{INSTALL_DIR} not found — nothing to remove.")
 
@@ -635,6 +741,11 @@ def main() -> None:
 
     write_install_metadata(args.repo, args.tag, platform_key, source_mode, local_root)
     setup_profile()
+
+    if not args.no_autostart:
+        setup_autostart(system, uninstall=False)
+    else:
+        setup_autostart(system, uninstall=True)
 
     print("\nInstallation complete!")
     start_proxies_after_install()
