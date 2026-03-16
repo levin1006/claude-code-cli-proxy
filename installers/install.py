@@ -20,7 +20,7 @@ DIRECTORIES_TO_CREATE = [
     "core",
     "configs/antigravity",
     "configs/claude",
-    "configs/codex",
+    "configs/openai",
     "configs/gemini",
 ]
 
@@ -592,7 +592,7 @@ def uninstall() -> None:
 
     # 4. Remove ~/.cli-proxy/ directory
     if INSTALL_DIR.exists():
-        tokens_dir = INSTALL_DIR / "configs" / "tokens"
+        tokens_dir = INSTALL_DIR / "tokens"
         keep_tokens = False
         
         if tokens_dir.exists() and any(tokens_dir.iterdir()):
@@ -606,18 +606,12 @@ def uninstall() -> None:
         if keep_tokens:
             print(f"Preserving token files at {tokens_dir}...")
             for item in INSTALL_DIR.iterdir():
-                if item.name == "configs":
-                    for config_item in item.iterdir():
-                        if config_item.name != "tokens":
-                            if config_item.is_dir():
-                                shutil.rmtree(config_item)
-                            else:
-                                config_item.unlink()
+                if item.name == "tokens":
+                    continue
+                if item.is_dir():
+                    shutil.rmtree(item)
                 else:
-                    if item.is_dir():
-                        shutil.rmtree(item)
-                    else:
-                        item.unlink()
+                    item.unlink()
             print("Removed cli-proxy files, but kept your tokens safe.")
         else:
             print(f"Removing {INSTALL_DIR} ...")

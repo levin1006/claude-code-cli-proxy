@@ -70,7 +70,7 @@ class TestGetTokenDir(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp(prefix="ccproxy_td_"))
         try:
             result = _resolve_token_root(tmp)
-            self.assertEqual(result, (tmp / "configs" / "tokens").resolve())
+            self.assertEqual(result, (tmp / "tokens").resolve())
         finally:
             shutil.rmtree(tmp)
 
@@ -113,7 +113,7 @@ class TestGetTokenFiles(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp(prefix="ccproxy_tf_"))
         try:
             os.environ.pop("CC_PROXY_TOKEN_DIR", None)
-            token_dir = tmp / "configs" / "tokens"
+            token_dir = tmp / "tokens"
             token_dir.mkdir(parents=True, exist_ok=True)
             (token_dir / "claude-alice.json").write_text('{"email":"alice"}')
             (token_dir / "claude-bob.json").write_text('{"email":"bob"}')
@@ -132,7 +132,7 @@ class TestGetTokenFiles(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp(prefix="ccproxy_tf_"))
         try:
             os.environ.pop("CC_PROXY_TOKEN_DIR", None)
-            token_dir = tmp / "configs" / "tokens"
+            token_dir = tmp / "tokens"
             token_dir.mkdir(parents=True, exist_ok=True)
             (token_dir / "ag-dave.json").write_text('{"email":"dave"}')
             (token_dir / "antigravity-eve.json").write_text('{"email":"eve"}')
@@ -146,7 +146,7 @@ class TestGetTokenFiles(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp(prefix="ccproxy_tf_"))
         try:
             os.environ.pop("CC_PROXY_TOKEN_DIR", None)
-            (tmp / "configs" / "tokens").mkdir(parents=True, exist_ok=True)
+            (tmp / "tokens").mkdir(parents=True, exist_ok=True)
             result = get_token_files(tmp, "claude")
             self.assertEqual(result, [])
         finally:
@@ -158,7 +158,7 @@ class TestResolveAccountFilePath(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp(prefix="ccproxy_rap_"))
         try:
             os.environ.pop("CC_PROXY_TOKEN_DIR", None)
-            (tmp / "configs" / "tokens").mkdir(parents=True, exist_ok=True)
+            (tmp / "tokens").mkdir(parents=True, exist_ok=True)
             result, err = resolve_account_file_path(tmp, "claude", "/etc/passwd")
             self.assertIsNone(result)
             self.assertIn("outside", err)
@@ -169,7 +169,7 @@ class TestResolveAccountFilePath(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp(prefix="ccproxy_rap_"))
         try:
             os.environ.pop("CC_PROXY_TOKEN_DIR", None)
-            token_dir = tmp / "configs" / "tokens"
+            token_dir = tmp / "tokens"
             token_dir.mkdir(parents=True, exist_ok=True)
             (token_dir / "claude-test.json").write_text("{}")
             result, err = resolve_account_file_path(tmp, "claude", "claude-test.json")

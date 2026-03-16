@@ -65,7 +65,7 @@ class TestCmdTokenList(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="ccproxy_tl_"))
         os.environ.pop("CC_PROXY_TOKEN_DIR", None)
-        td = self.tmp / "configs" / "tokens"
+        td = self.tmp / "tokens"
         td.mkdir(parents=True, exist_ok=True)
         import json
         (td / "claude-test.json").write_text(json.dumps({"email": "test@test.com"}))
@@ -86,7 +86,7 @@ class TestCmdTokenDelete(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="ccproxy_td_"))
         os.environ.pop("CC_PROXY_TOKEN_DIR", None)
-        td = self.tmp / "configs" / "tokens"
+        td = self.tmp / "tokens"
         td.mkdir(parents=True, exist_ok=True)
         import json
         (td / "claude-delete_me.json").write_text(json.dumps({"email": "delete_me@test.com"}))
@@ -101,7 +101,7 @@ class TestCmdTokenDelete(unittest.TestCase):
     def test_deletes_with_yes(self):
         result = cmd_token_delete(self.tmp, "claude", "claude-delete_me.json", yes=True)
         self.assertEqual(result, 0)
-        td = self.tmp / "configs" / "tokens"
+        td = self.tmp / "tokens"
         self.assertFalse((td / "claude-delete_me.json").exists())
 
     def test_invalid_provider(self):

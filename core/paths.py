@@ -68,7 +68,7 @@ def _resolve_token_root(base_dir):
     Priority:
     1) CC_PROXY_TOKEN_DIR env var
     2) <base_dir>/.token-dir file contents
-    3) default <base_dir>/configs/tokens
+    3) default <base_dir>/tokens
     """
     env_dir = (os.environ.get(TOKEN_DIR_ENV) or "").strip()
     if env_dir:
@@ -83,7 +83,7 @@ def _resolve_token_root(base_dir):
         except Exception:
             pass
 
-    return (base_dir / "configs" / "tokens").resolve()
+    return (base_dir / "tokens").resolve()
 
 
 def get_token_dir(base_dir, create=False):

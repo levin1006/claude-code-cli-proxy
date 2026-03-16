@@ -141,7 +141,7 @@ class TestGetTokenInfos(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="ccproxy_ti_"))
         os.environ.pop("CC_PROXY_TOKEN_DIR", None)
-        self.token_dir = self.tmp / "configs" / "tokens"
+        self.token_dir = self.tmp / "tokens"
         self.token_dir.mkdir(parents=True, exist_ok=True)
 
     def tearDown(self):

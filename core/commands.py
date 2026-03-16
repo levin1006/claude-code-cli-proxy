@@ -299,7 +299,7 @@ def cmd_token_dir(base_dir, token_dir=None, reset=False):
             print("[cc-proxy] token-dir reset to default.")
         else:
             print("[cc-proxy] token-dir is already using the default (no override set).")
-        default_dir = base_dir / "configs" / "tokens"
+        default_dir = base_dir / "tokens"
         _propagate_token_dir(base_dir, default_dir)
         print("[cc-proxy] token-dir: {}".format(default_dir))
         return 0
@@ -321,7 +321,7 @@ def cmd_token_dir(base_dir, token_dir=None, reset=False):
     elif (base_dir / TOKEN_DIR_META_FILE).exists():
         print("[cc-proxy] source: {}".format(TOKEN_DIR_META_FILE))
     else:
-        print("[cc-proxy] source: default (configs/tokens)")
+        print("[cc-proxy] source: default (tokens)")
     return 0
 
 
