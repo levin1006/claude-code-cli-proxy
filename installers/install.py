@@ -224,8 +224,23 @@ def install_binary(
         assert local_root is not None
         source_binary = local_root / relative_path
         if not source_binary.exists():
-            print(f"Error: missing local binary for platform {platform_key}: {source_binary}")
-            sys.exit(1)
+            print(f"Notice: local binary missing for platform {platform_key}.")
+            print("Auto-fetching binaries using core/binary_updater.py ...")
+            updater_script = local_root / "core" / "binary_updater.py"
+            if updater_script.exists():
+                import subprocess
+                res = subprocess.run([sys.executable, str(updater_script)])
+                if res.returncode != 0:
+                    print("Error: auto-fetch failed.")
+                    sys.exit(1)
+            else:
+                print(f"Error: missing local binary and updater script not found: {updater_script}")
+                sys.exit(1)
+            
+            if not source_binary.exists():
+                print(f"Error: binary still missing after auto-fetch: {source_binary}")
+                sys.exit(1)
+
         copy_local_file(source_binary, temp_target)
     else:
         binary_url = raw_tag_url(repo, tag, relative_path)
