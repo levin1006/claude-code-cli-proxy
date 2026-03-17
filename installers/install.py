@@ -432,7 +432,7 @@ def setup_profile() -> None:
                 "}"
                 "$c = Get-Content -Path $p -Raw -ErrorAction SilentlyContinue;"
                 f"if (-not $c -or -not $c.Contains('{profile_line}')) {{"
-                f"    Out-File -FilePath $p -Append -Encoding utf8 -InputObject \"`n{profile_line}\";"
+                f"    Out-File -FilePath $p -Append -Encoding utf8 -InputObject \"`r`n{profile_line}\";"
                 "    Write-Host \"Added profile line to $p\";"
                 "} else {"
                 "    Write-Host \"Profile line already exists in $p\";"
