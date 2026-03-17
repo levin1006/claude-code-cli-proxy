@@ -40,6 +40,18 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "[install-local] Failed." -ForegroundColor Red
 } else {
     Write-Host "[install-local] Done." -ForegroundColor Green
+    
+    # Handle uninstall cleanup
+    $uninstallFlag = "$env:TEMP\cc_proxy_uninstall_flag"
+    if (Test-Path $uninstallFlag) {
+        Remove-Item $uninstallFlag -Force -ErrorAction SilentlyContinue
+        Remove-Item Function:cc* -ErrorAction SilentlyContinue
+        Remove-Item Function:_cc* -ErrorAction SilentlyContinue
+        Remove-Item Function:Install-CCProxyProfile -ErrorAction SilentlyContinue
+        Remove-Item Function:Show-CCProxyProfileSetupHint -ErrorAction SilentlyContinue
+        exit 0
+    }
+
     # Reload helpers into the current session so new functions (e.g. cc-proxy-update)
     # are available immediately without restarting the terminal.
     $installedPs1 = Join-Path $HOME ".cli-proxy\shell\powershell\cc-proxy.ps1"

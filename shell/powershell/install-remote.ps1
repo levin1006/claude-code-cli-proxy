@@ -100,7 +100,10 @@ if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
 $uninstallFlag = "$env:TEMP\cc_proxy_uninstall_flag"
 if (Test-Path $uninstallFlag) {
     Remove-Item $uninstallFlag -Force -ErrorAction SilentlyContinue
-    Get-Alias -Name cc* -ErrorAction SilentlyContinue | Remove-Item -ErrorAction SilentlyContinue
+    Remove-Item Function:cc* -ErrorAction SilentlyContinue
+    Remove-Item Function:_cc* -ErrorAction SilentlyContinue
+    Remove-Item Function:Install-CCProxyProfile -ErrorAction SilentlyContinue
+    Remove-Item Function:Show-CCProxyProfileSetupHint -ErrorAction SilentlyContinue
     exit 0
 }
 

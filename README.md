@@ -68,7 +68,7 @@ bash install-local.sh
 
 또는 저장소 클론 없이 직접 실행 (최초 설치):
 ```powershell
-irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.ps1 | iex
+irm "https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.ps1?v=$(Get-Random)" | iex
 ```
 
 **Linux / macOS:**
@@ -78,7 +78,7 @@ bash install-remote.sh
 
 또는 저장소 클론 없이 직접 실행 (최초 설치):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.sh | bash
+curl -H "Cache-Control: no-cache" -fsSL "https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.sh?v=$RANDOM" | bash
 ```
 
 > **주의:** `install-remote`는 GitHub main 브랜치에서 파일을 다운로드합니다. 로컬 변경사항이 덮어씌워지므로 개발 중에는 `install-local`을 사용하세요.
@@ -114,12 +114,12 @@ bash install-local.sh --uninstall
 
 **Windows (저장소 없이, PowerShell):**
 ```powershell
-Invoke-Command -ScriptBlock ([scriptblock]::Create((irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.ps1))) -ArgumentList "--uninstall"
+Invoke-Command -ScriptBlock ([scriptblock]::Create((irm "https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.ps1?v=$(Get-Random)"))) -ArgumentList "--uninstall"
 ```
 
 **Linux / macOS (저장소 없이, curl):**
 ```bash
-curl -H "Cache-Control: no-cache" -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.sh | bash -s -- --uninstall
+curl -H "Cache-Control: no-cache" -fsSL "https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.sh?v=$RANDOM" | bash -s -- --uninstall
 ```
 
 
