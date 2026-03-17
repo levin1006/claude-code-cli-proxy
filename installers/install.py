@@ -287,10 +287,23 @@ def install_binary(
                 pass
             return None, "Could not resolve latest release tag"
 
-        def _download_binary(release_repo, platform_k, target_tmp, timeout=120):
-            tag, err = _get_latest_tag(release_repo)
-            if err or not tag:
-                return False, f"Failed to get latest release tag: {err}"
+        def _download_binary(release_repo, platform_k, target_tmp, installer_repo, installer_tag, timeout=120):
+            # 1. Try to read pinned version from binary-version.txt in this repo
+            tag = None
+            try:
+                ver_url = f"https://raw.githubusercontent.com/{installer_repo}/{installer_tag}/binary-version.txt"
+                with urllib.request.urlopen(ver_url, timeout=10) as r:
+                    tag = r.read().decode().strip()
+                print(f"Using pinned binary version: {tag}")
+            except Exception:
+                pass
+
+            # 2. Fall back to fetching latest from GitHub Releases
+            if not tag:
+                tag, err = _get_latest_tag(release_repo)
+                if err or not tag:
+                    return False, f"Failed to get release tag: {err}"
+                print(f"No binary-version.txt found, using latest: {tag}")
 
             version = tag.lstrip("v")
             os_name, arch = platform_k.split("-")
@@ -338,7 +351,8 @@ def install_binary(
                     pass
             return True, None
 
-        ok, dl_err = _download_binary(BINARY_RELEASE_REPO, platform_key, temp_target)
+        ok, dl_err = _download_binary(BINARY_RELEASE_REPO, platform_key, temp_target,
+                                       installer_repo=repo, installer_tag=tag)
         if not ok:
             print(f"Error: {dl_err}")
             sys.exit(1)
