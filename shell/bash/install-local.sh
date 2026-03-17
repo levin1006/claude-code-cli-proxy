@@ -31,4 +31,6 @@ PROXY_SCRIPT="$HOME/.cli-proxy/shell/bash/cc-proxy.sh"
 if [ -f "$PROXY_SCRIPT" ]; then
     echo "[install-local] To activate new commands in this shell, run:"
     echo "  source \"$PROXY_SCRIPT\""
+    echo "[install-local] Or to cleanly reload the shell, run:"
+    echo "  exec \$SHELL"
 fi

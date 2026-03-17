@@ -81,6 +81,8 @@ if [ -f "$PROXY_SCRIPT" ] && [ "$DO_UNINSTALL" = false ]; then
     echo ""
     echo -e "\033[0;36mTo activate in this session, run:\033[0m"
     echo -e "  \033[1msource \"$PROXY_SCRIPT\"\033[0m"
+    echo -e "\033[0;36mOr to cleanly reload the shell, run:\033[0m"
+    echo -e "  \033[1mexec \$SHELL\033[0m"
     echo ""
     echo "New terminals will load helpers automatically."
 fi
