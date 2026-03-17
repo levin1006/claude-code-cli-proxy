@@ -65,13 +65,8 @@ curl -fsSL "$INSTALLER_URL" -o "$TEMP_SCRIPT"
 if [ "$DO_UNINSTALL" = true ]; then
     python3 "$TEMP_SCRIPT" --uninstall
     echo ""
-    read -p "[?] Do you want to restart the shell now to cleanly remove aliases? (y/N) [Default: N]: " confirm
-    if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
-        echo "Restarting shell..."
-        exec "${SHELL:-bash}"
-    else
-        echo "Run 'exec \$SHELL' or open a new terminal to clean up lingering aliases."
-    fi
+    echo "Open a new terminal or run: exec \$SHELL"
+    echo "to clean up any lingering aliases."
 else
     [[ -z "$SOURCE_MODE" ]] && SOURCE_MODE="remote"
     echo "Using repository ref: $REQUESTED_TAG"
@@ -87,14 +82,10 @@ if [ -f "$PROXY_SCRIPT" ] && [ "$DO_UNINSTALL" = false ]; then
     echo ""
     echo -e "\033[0;32mInstallation complete!\033[0m"
     echo ""
-    read -p "[?] Do you want to restart the shell now to apply changes? (y/N) [Default: N]: " confirm < /dev/tty || confirm="N"
-    if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
-        echo "Restarting shell..."
-        exec "${SHELL:-bash}"
-    else
-        echo -e "\033[0;36mTo activate in this session manually, run:\033[0m"
-        echo -e "  \033[1msource \"$PROXY_SCRIPT\"\033[0m"
-        echo ""
-        echo "New terminals will load helpers automatically."
-    fi
+    echo -e "\033[0;33m[!] Since this installer ran via a pipe (curl | bash), the shell\033[0m"
+    echo -e "\033[0;33m    cannot be auto-reloaded. Please run the following command NOW:\033[0m"
+    echo ""
+    echo -e "  \033[1;36msource \"$PROXY_SCRIPT\"\033[0m"
+    echo ""
+    echo "New terminals will load helpers automatically via ~/.bashrc / ~/.zshrc."
 fi
