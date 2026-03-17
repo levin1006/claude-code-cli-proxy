@@ -633,8 +633,6 @@ def uninstall() -> None:
     print("\nUninstall complete.")
     if system == "windows":
         print("Restart your PowerShell terminal to clean up lingering aliases.")
-    else:
-        print("Run 'exec $SHELL' or open a new terminal to clean up lingering aliases.")
 
 
 

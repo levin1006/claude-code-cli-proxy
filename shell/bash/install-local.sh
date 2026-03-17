@@ -12,6 +12,14 @@ INSTALL_PY="$REPO_ROOT/installers/install.py"
 if [[ " $* " == *" --uninstall "* ]] || [[ "$1" == "--uninstall" ]]; then
     echo "[install-local] Uninstalling cli-proxy..."
     python3 "$INSTALL_PY" --uninstall
+    echo ""
+    read -p "[?] Do you want to restart the shell now to cleanly remove aliases? (y/N) [Default: N]: " confirm
+    if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+        echo "Restarting shell..."
+        exec "${SHELL:-bash}"
+    else
+        echo "[install-local] Run 'exec \$SHELL' or open a new terminal to clean up lingering aliases."
+    fi
 else
     echo "[install-local] Local installation: repo -> ~/.cli-proxy/"
     cd "$REPO_ROOT"

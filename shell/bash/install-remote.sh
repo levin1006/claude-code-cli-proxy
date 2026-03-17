@@ -64,6 +64,14 @@ curl -fsSL "$INSTALLER_URL" -o "$TEMP_SCRIPT"
 
 if [ "$DO_UNINSTALL" = true ]; then
     python3 "$TEMP_SCRIPT" --uninstall
+    echo ""
+    read -p "[?] Do you want to restart the shell now to cleanly remove aliases? (y/N) [Default: N]: " confirm
+    if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+        echo "Restarting shell..."
+        exec "${SHELL:-bash}"
+    else
+        echo "Run 'exec \$SHELL' or open a new terminal to clean up lingering aliases."
+    fi
 else
     [[ -z "$SOURCE_MODE" ]] && SOURCE_MODE="remote"
     echo "Using repository ref: $REQUESTED_TAG"
