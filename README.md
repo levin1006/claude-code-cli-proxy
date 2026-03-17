@@ -112,9 +112,14 @@ curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/mai
 bash install-local.sh --uninstall
 ```
 
+**Windows (저장소 없이, PowerShell):**
+```powershell
+Invoke-Command -ScriptBlock ([scriptblock]::Create((irm https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.ps1))) -ArgumentList "--uninstall"
+```
+
 **Linux / macOS (저장소 없이, curl):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.sh | bash -s -- --uninstall
+curl -H "Cache-Control: no-cache" -fsSL https://raw.githubusercontent.com/levin1006/claude-code-cli-proxy/main/install-remote.sh | bash -s -- --uninstall
 ```
 
 

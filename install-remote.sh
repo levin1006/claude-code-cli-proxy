@@ -6,7 +6,7 @@ set -e
 
 REPO="${CC_PROXY_INSTALL_REPO:-levin1006/claude-code-cli-proxy}"
 REF="${CC_PROXY_INSTALL_TAG:-main}"
-_URL="https://raw.githubusercontent.com/${REPO}/${REF}/shell/bash/install-remote.sh"
+_URL="https://raw.githubusercontent.com/${REPO}/${REF}/shell/bash/install-remote.sh?v=${RANDOM}"
 
 echo "[install-remote] Fetching installer from ${_URL} ..."
-curl -fsSL "$_URL" | bash -s -- "$@"
+curl -H "Cache-Control: no-cache" -fsSL "$_URL" | bash -s -- "$@"
