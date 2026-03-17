@@ -257,8 +257,8 @@ def install_binary(
             
         try:
             import binary_updater
-            print(f"Fetching latest release tag for {repo}...")
-            release_tag, err = binary_updater.get_latest_release(repo=repo)
+            print("Fetching latest release tag for binary...")
+            release_tag, err = binary_updater.get_latest_release()
             if err or not release_tag:
                 print(f"Error: Failed to fetch latest release tag for binary: {err}")
                 sys.exit(1)
