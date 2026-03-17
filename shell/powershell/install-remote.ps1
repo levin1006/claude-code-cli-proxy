@@ -82,7 +82,8 @@ if ($doUninstall) {
     if ($localPath) { $pyArgs += @("--local-path", $localPath) }
 }
 
-$installerUrl = "https://raw.githubusercontent.com/$repo/$requestedTag/installers/install.py"
+$timestamp = [int][double]::Parse((Get-Date -UFormat %s))
+$installerUrl = "https://raw.githubusercontent.com/$repo/$requestedTag/installers/install.py?v=$timestamp"
 $tempScript = "$env:TEMP\install_cc_proxy.py"
 
 # Download Python installer

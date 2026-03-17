@@ -56,7 +56,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-INSTALLER_URL="https://raw.githubusercontent.com/${REPO}/${REQUESTED_TAG}/installers/install.py"
+INSTALLER_URL="https://raw.githubusercontent.com/${REPO}/${REQUESTED_TAG}/installers/install.py?v=$(date +%s)"
 TEMP_SCRIPT="/tmp/install_cc_proxy.py"
 
 echo "Downloading core installation script..."
