@@ -575,7 +575,7 @@ def uninstall() -> None:
         except Exception as e:
             print(f"Warning: could not clean PowerShell profile: {e}")
     else:
-        src_line = f'source "{INSTALL_DIR}/shell/bash/cc-proxy.sh"'
+        src_path = f"{INSTALL_DIR}/shell/bash/cc-proxy.sh"
         for rc_name in (".bashrc", ".zshrc"):
             rc_path = Path.home() / rc_name
             if not rc_path.exists():
@@ -584,7 +584,7 @@ def uninstall() -> None:
             new_lines = []
             skip_next_blank = False
             for line in content.splitlines():
-                if src_line in line or "Added by cli-proxy installer" in line:
+                if src_path in line or "Added by cli-proxy installer" in line:
                     skip_next_blank = True
                     continue
                 if skip_next_blank and line.strip() == "":
