@@ -243,11 +243,6 @@ def install_binary(
 
         copy_local_file(source_binary, temp_target)
     else:
-        # Remote mode implies we need to download the binary dynamically from GitHub releases,
-        # because binaries are not stored in the repository contents (raw.githubusercontent.com).
-        # We can reuse the core binary updater functions if they exist in the installation base dir currently,
-        # but since we're installing them right now, we can download the binary zip/tar manually, or
-        # try to import the updater script we JUST downloaded a second ago during install_core_files.
         updater_script = INSTALL_DIR / "core" / "binary_updater.py"
         if not updater_script.exists():
             print(f"Error: remote install requires core/binary_updater.py which was not found at {updater_script}")
