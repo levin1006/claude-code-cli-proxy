@@ -243,10 +243,47 @@ def install_binary(
 
         copy_local_file(source_binary, temp_target)
     else:
-        binary_url = raw_tag_url(repo, tag, relative_path)
-        download_file(binary_url, temp_target)
+        # Remote mode implies we need to download the binary dynamically from GitHub releases,
+        # because binaries are not stored in the repository contents (raw.githubusercontent.com).
+        # We can reuse the core binary updater functions if they exist in the installation base dir currently,
+        # but since we're installing them right now, we can download the binary zip/tar manually, or
+        # try to import the updater script we JUST downloaded a second ago during install_core_files.
+        updater_script = INSTALL_DIR / "core" / "binary_updater.py"
+        if not updater_script.exists():
+            print(f"Error: remote install requires core/binary_updater.py which was not found at {updater_script}")
+            sys.exit(1)
+        
+        # Add core to sys.path so we can import the downloaded updater logic directly.
+        core_dir = str(INSTALL_DIR / "core")
+        if core_dir not in sys.path:
+            sys.path.insert(0, core_dir)
+            
+        try:
+            import binary_updater
+            print(f"Fetching latest release tag for {repo}...")
+            release_tag, err = binary_updater.get_latest_release(repo=repo)
+            if err or not release_tag:
+                print(f"Error: Failed to fetch latest release tag for binary: {err}")
+                sys.exit(1)
+            
+            # Map platform string (linux-amd64) to updater platforms
+            os_name, arch = platform_key.split("-")
+            ext = "zip" if os_name == "windows" else "tar.gz"
+            binary_name = "cli-proxy-api.exe" if os_name == "windows" else "cli-proxy-api"
+            
+            url = binary_updater.build_download_url(release_tag, os_name, arch, ext)
+            print(f"Downloading remote binary from {url} ...")
+            
+            ok, dl_err = binary_updater.download_and_place(url, temp_target, os_name, binary_name)
+            if not ok:
+                print(f"Error: Failed to download and extract remote binary: {dl_err}")
+                sys.exit(1)
+                
+        except Exception as e:
+            print(f"Error orchestrating remote binary download: {e}")
+            sys.exit(1)
 
-    if system == "linux":
+    if system == "linux" and temp_target.exists():
         temp_target.chmod(temp_target.stat().st_mode | stat.S_IEXEC)
 
     try:
