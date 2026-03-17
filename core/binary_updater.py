@@ -65,7 +65,18 @@ def get_latest_release(repo=None, timeout=15):
             return None, "GitHub API response missing 'tag_name'"
     except urllib.error.HTTPError as exc:
         if exc.code == 403:
-            return None, "GitHub API rate limit exceeded (HTTP 403)"
+            # Fallback: bypass API rate limit by following redirect on the web UI
+            try:
+                html_url = "https://github.com/{}/releases/latest".format(repo)
+                html_req = urllib.request.Request(html_url, method="HEAD")
+                with urllib.request.urlopen(html_req, timeout=timeout) as html_resp:
+                    final_url = html_resp.url
+                    if "releases/tag/" in final_url:
+                        tag = final_url.split("/")[-1]
+                        return tag, None
+                    return None, "Fallback redirect parsing failed: " + final_url
+            except Exception as fallback_exc:
+                return None, "GitHub API rate limit exceeded and fallback failed: {}".format(fallback_exc)
         return None, "GitHub API HTTP error: {} {}".format(exc.code, exc.reason)
     except urllib.error.URLError as exc:
         return None, "Network error: {}".format(exc.reason)
