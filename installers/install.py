@@ -54,6 +54,7 @@ CORE_FILES = {
     "core/tui.py": "core/tui.py",
     "core/commands.py": "core/commands.py",
     "core/updater.py": "core/updater.py",
+    "core/binary_updater.py": "core/binary_updater.py",
 }
 
 BINARY_PATHS = {
@@ -227,8 +228,8 @@ def install_binary(
         source_binary = local_root / relative_path
         if not source_binary.exists():
             print(f"Notice: local binary missing for platform {platform_key}.")
-            print("Auto-fetching binaries using core/updater.py ...")
-            updater_script = local_root / "core" / "updater.py"
+            print("Auto-fetching binaries using core/binary_updater.py ...")
+            updater_script = local_root / "core" / "binary_updater.py"
             if updater_script.exists():
                 import subprocess
                 res = subprocess.run([sys.executable, str(updater_script)])
@@ -245,33 +246,31 @@ def install_binary(
 
         copy_local_file(source_binary, temp_target)
     else:
-        updater_script = INSTALL_DIR / "core" / "updater.py"
+        updater_script = INSTALL_DIR / "core" / "binary_updater.py"
         if not updater_script.exists():
-            print(f"Error: remote install requires core/updater.py which was not found at {updater_script}")
+            print(f"Error: remote install requires core/binary_updater.py which was not found at {updater_script}")
             sys.exit(1)
         
-        # Add core to sys.path so we can import the downloaded updater logic directly.
         core_dir = str(INSTALL_DIR / "core")
         if core_dir not in sys.path:
             sys.path.insert(0, core_dir)
             
         try:
-            import updater
+            import binary_updater
             print(f"Fetching latest release tag for {repo}...")
-            release_tag, err = updater.get_latest_release(repo=repo)
+            release_tag, err = binary_updater.get_latest_release(repo=repo)
             if err or not release_tag:
                 print(f"Error: Failed to fetch latest release tag for binary: {err}")
                 sys.exit(1)
             
-            # Map platform string (linux-amd64) to updater platforms
             os_name, arch = platform_key.split("-")
             ext = "zip" if os_name == "windows" else "tar.gz"
             binary_name = "cli-proxy-api.exe" if os_name == "windows" else "cli-proxy-api"
             
-            url = updater.build_download_url(release_tag, os_name, arch, ext)
+            url = binary_updater.build_download_url(release_tag, os_name, arch, ext)
             print(f"Downloading remote binary from {url} ...")
             
-            ok, dl_err = updater.download_and_place(url, temp_target, os_name, binary_name)
+            ok, dl_err = binary_updater.download_and_place(url, temp_target, os_name, binary_name)
             if not ok:
                 print(f"Error: Failed to download and extract remote binary: {dl_err}")
                 sys.exit(1)
