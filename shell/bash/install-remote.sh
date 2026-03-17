@@ -79,10 +79,14 @@ if [ -f "$PROXY_SCRIPT" ] && [ "$DO_UNINSTALL" = false ]; then
     echo ""
     echo -e "\033[0;32mInstallation complete!\033[0m"
     echo ""
-    echo -e "\033[0;36mTo activate in this session, run:\033[0m"
-    echo -e "  \033[1msource \"$PROXY_SCRIPT\"\033[0m"
-    echo -e "\033[0;36mOr to cleanly reload the shell, run:\033[0m"
-    echo -e "  \033[1mexec \$SHELL\033[0m"
-    echo ""
-    echo "New terminals will load helpers automatically."
+    read -p "[?] Do you want to restart the shell now to apply changes? (y/N) [Default: N]: " confirm
+    if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+        echo "Restarting shell..."
+        exec "${SHELL:-bash}"
+    else
+        echo -e "\033[0;36mTo activate in this session manually, run:\033[0m"
+        echo -e "  \033[1msource \"$PROXY_SCRIPT\"\033[0m"
+        echo ""
+        echo "New terminals will load helpers automatically."
+    fi
 fi

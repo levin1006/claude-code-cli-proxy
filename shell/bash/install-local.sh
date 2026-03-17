@@ -29,8 +29,13 @@ echo "[install-local] Done."
 # helpers into the caller's shell. The user must run the line below once.
 PROXY_SCRIPT="$HOME/.cli-proxy/shell/bash/cc-proxy.sh"
 if [ -f "$PROXY_SCRIPT" ]; then
-    echo "[install-local] To activate new commands in this shell, run:"
-    echo "  source \"$PROXY_SCRIPT\""
-    echo "[install-local] Or to cleanly reload the shell, run:"
-    echo "  exec \$SHELL"
+    echo ""
+    read -p "[?] Do you want to restart the shell now to apply changes? (y/N) [Default: N]: " confirm
+    if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+        echo "Restarting shell..."
+        exec "${SHELL:-bash}"
+    else
+        echo "[install-local] To activate new commands in this shell manually, run:"
+        echo "  source \"$PROXY_SCRIPT\""
+    fi
 fi

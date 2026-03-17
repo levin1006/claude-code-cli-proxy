@@ -357,12 +357,6 @@ def setup_profile() -> None:
 
         print(f"Added source line to ~/{rc_file}")
 
-    print("\n--- Setup Profile ---")
-    print("To apply changes immediately in this shell, run:")
-    print(f"  source {INSTALL_DIR}/shell/bash/cc-proxy.sh")
-    print("Or to cleanly reload the shell, run:")
-    print("  exec $SHELL")
-
 
 def _resolve_commit_sha(
     source_mode: str,
