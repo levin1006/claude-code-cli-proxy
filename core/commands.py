@@ -168,7 +168,8 @@ def install_profile(base_dir, hint_only=False):
 
 
 def _install_profile_linux(base_dir, hint_only):
-    src_line = 'source "{}/shell/bash/cc-proxy.sh"'.format(base_dir)
+    src_path = "{}/shell/bash/cc-proxy.sh".format(base_dir)
+    src_line = 'source "{}"'.format(src_path)
 
     rcfiles = []
     for name in (".bashrc", ".zshrc"):
@@ -179,7 +180,7 @@ def _install_profile_linux(base_dir, hint_only):
     if not rcfiles:
         rcfiles = [Path.home() / ".bashrc"]
 
-    missing_src = [p for p in rcfiles if src_line not in p.read_text(errors="replace")]
+    missing_src = [p for p in rcfiles if src_path not in p.read_text(errors="replace")]
 
     if not missing_src:
         if not hint_only:

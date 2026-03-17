@@ -341,7 +341,7 @@ def setup_profile() -> None:
         return
 
     src_path = f"{INSTALL_DIR}/shell/bash/cc-proxy.sh"
-    source_line = f"source {src_path}"
+    source_line = f'source "{src_path}"'
 
     for rc_file in [".bashrc", ".zshrc"]:
         rc_path = Path.home() / rc_file

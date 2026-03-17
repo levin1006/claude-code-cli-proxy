@@ -63,9 +63,9 @@ _cc_proxy_show_profile_hint() {
     return
   fi
 
-  local src_line="source \"${CC_PROXY_BASE_DIR}/shell/bash/cc-proxy.sh\""
+  local src_path="${CC_PROXY_BASE_DIR}/shell/bash/cc-proxy.sh"
   for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-    [[ -f "$rc" ]] && grep -qF "$src_line" "$rc" 2>/dev/null && return
+    [[ -f "$rc" ]] && grep -qF "$src_path" "$rc" 2>/dev/null && return
   done
   _cc_proxy install-profile --hint-only
 }
