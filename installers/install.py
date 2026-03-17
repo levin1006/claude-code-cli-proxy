@@ -99,7 +99,9 @@ def download_file(url: str, target_path: Path) -> None:
 
 
 def raw_tag_url(repo: str, tag: str, relative_path: str) -> str:
-    return f"https://raw.githubusercontent.com/{repo}/{tag}/{relative_path}"
+    # Append timestamp to bypass GitHub's raw CDN caching which can hold stale files for ~5 minutes.
+    ts = int(datetime.now(timezone.utc).timestamp())
+    return f"https://raw.githubusercontent.com/{repo}/{tag}/{relative_path}?v={ts}"
 
 
 def is_local_source_tree(root: Path) -> bool:
