@@ -87,7 +87,7 @@ if [ -f "$PROXY_SCRIPT" ] && [ "$DO_UNINSTALL" = false ]; then
     echo ""
     echo -e "\033[0;32mInstallation complete!\033[0m"
     echo ""
-    read -p "[?] Do you want to restart the shell now to apply changes? (y/N) [Default: N]: " confirm
+    read -p "[?] Do you want to restart the shell now to apply changes? (y/N) [Default: N]: " confirm < /dev/tty || confirm="N"
     if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
         echo "Restarting shell..."
         exec "${SHELL:-bash}"

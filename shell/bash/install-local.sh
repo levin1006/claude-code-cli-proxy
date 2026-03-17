@@ -38,7 +38,7 @@ echo "[install-local] Done."
 PROXY_SCRIPT="$HOME/.cli-proxy/shell/bash/cc-proxy.sh"
 if [ -f "$PROXY_SCRIPT" ]; then
     echo ""
-    read -p "[?] Do you want to restart the shell now to apply changes? (y/N) [Default: N]: " confirm
+    read -p "[?] Do you want to restart the shell now to apply changes? (y/N) [Default: N]: " confirm < /dev/tty || confirm="N"
     if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
         echo "Restarting shell..."
         exec "${SHELL:-bash}"

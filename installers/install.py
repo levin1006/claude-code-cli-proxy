@@ -239,45 +239,110 @@ def install_binary(
             else:
                 print(f"Error: missing local binary and updater script not found: {updater_script}")
                 sys.exit(1)
-            
+
             if not source_binary.exists():
                 print(f"Error: binary still missing after auto-fetch: {source_binary}")
                 sys.exit(1)
 
         copy_local_file(source_binary, temp_target)
     else:
-        updater_script = INSTALL_DIR / "core" / "binary_updater.py"
-        if not updater_script.exists():
-            print(f"Error: remote install requires core/binary_updater.py which was not found at {updater_script}")
-            sys.exit(1)
-        
-        core_dir = str(INSTALL_DIR / "core")
-        if core_dir not in sys.path:
-            sys.path.insert(0, core_dir)
-            
-        try:
-            import binary_updater
-            print("Fetching latest release tag for binary...")
-            release_tag, err = binary_updater.get_latest_release()
-            if err or not release_tag:
-                print(f"Error: Failed to fetch latest release tag for binary: {err}")
-                sys.exit(1)
-            
-            os_name, arch = platform_key.split("-")
+        # --- Self-contained GitHub Releases binary downloader ---
+        # Does NOT import binary_updater.py so it works even when install.py is cached.
+        import json as _json
+        import tarfile as _tarfile
+        import tempfile as _tempfile
+        import zipfile as _zipfile
+        import urllib.error as _uerr
+
+        BINARY_RELEASE_REPO = "router-for-me/CLIProxyAPI"
+
+        def _get_latest_tag(release_repo, timeout=15):
+            # Try GitHub REST API first
+            api_url = f"https://api.github.com/repos/{release_repo}/releases/latest"
+            req = urllib.request.Request(api_url, headers={
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "cc-proxy-installer/1.0",
+            })
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    data = _json.loads(r.read().decode())
+                    tag = data.get("tag_name")
+                    if tag:
+                        return tag, None
+            except _uerr.HTTPError as exc:
+                if exc.code != 403:
+                    return None, f"GitHub API error: {exc.code}"
+            except Exception as exc:
+                return None, str(exc)
+            # Fallback: parse redirect from browser URL (no API quota)
+            try:
+                html_req = urllib.request.Request(
+                    f"https://github.com/{release_repo}/releases/latest", method="HEAD"
+                )
+                with urllib.request.urlopen(html_req, timeout=timeout) as r:
+                    final = r.url
+                    if "releases/tag/" in final:
+                        return final.split("/")[-1], None
+            except Exception as exc:
+                pass
+            return None, "Could not resolve latest release tag"
+
+        def _download_binary(release_repo, platform_k, target_tmp, timeout=120):
+            tag, err = _get_latest_tag(release_repo)
+            if err or not tag:
+                return False, f"Failed to get latest release tag: {err}"
+
+            version = tag.lstrip("v")
+            os_name, arch = platform_k.split("-")
             ext = "zip" if os_name == "windows" else "tar.gz"
-            binary_name = "cli-proxy-api.exe" if os_name == "windows" else "cli-proxy-api"
-            
-            url = binary_updater.build_download_url(release_tag, os_name, arch, ext)
-            print(f"Downloading remote binary from {url} ...")
-            
-            ok, dl_err = binary_updater.download_and_place(url, temp_target, os_name, binary_name)
-            if not ok:
-                print(f"Error: Failed to download and extract remote binary: {dl_err}")
-                sys.exit(1)
-                
-        except Exception as e:
-            print(f"Error orchestrating remote binary download: {e}")
+            bin_name = "cli-proxy-api.exe" if os_name == "windows" else "cli-proxy-api"
+            filename = f"CLIProxyAPI_{version}_{os_name}_{arch}.{ext}"
+            url = f"https://github.com/{release_repo}/releases/download/{tag}/{filename}"
+
+            print(f"Downloading binary from {url} ...")
+            try:
+                with _tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tf:
+                    tmp_arc = tf.name
+                urllib.request.urlretrieve(url, tmp_arc)
+            except Exception as exc:
+                return False, f"Download failed: {exc}"
+
+            try:
+                target_tmp.parent.mkdir(parents=True, exist_ok=True)
+                if ext == "tar.gz":
+                    with _tarfile.open(tmp_arc, "r:gz") as arc:
+                        member = next(
+                            (m for m in arc.getmembers() if m.name.endswith(bin_name) and not m.isdir()),
+                            None
+                        )
+                        if not member:
+                            return False, f"Binary '{bin_name}' not found in archive"
+                        member.name = target_tmp.name
+                        arc.extract(member, path=str(target_tmp.parent))
+                else:
+                    with _zipfile.ZipFile(tmp_arc) as arc:
+                        member = next(
+                            (n for n in arc.namelist() if n.endswith(bin_name)),
+                            None
+                        )
+                        if not member:
+                            return False, f"Binary '{bin_name}' not found in archive"
+                        data = arc.read(member)
+                        target_tmp.write_bytes(data)
+            except Exception as exc:
+                return False, f"Extraction failed: {exc}"
+            finally:
+                try:
+                    Path(tmp_arc).unlink()
+                except Exception:
+                    pass
+            return True, None
+
+        ok, dl_err = _download_binary(BINARY_RELEASE_REPO, platform_key, temp_target)
+        if not ok:
+            print(f"Error: {dl_err}")
             sys.exit(1)
+
 
     if system == "linux" and temp_target.exists():
         temp_target.chmod(temp_target.stat().st_mode | stat.S_IEXEC)
