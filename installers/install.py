@@ -747,19 +747,14 @@ def uninstall() -> None:
     if system == "windows":
         print("Restarting your PowerShell session to clean up lingering aliases...")
         try:
-            # We must launch a new PowerShell instance that replaces the current one,
-            # or send a command to the host. The most reliable way from Python is to
-            # spawn a detached pwsh or powershell process and let the current one die,
-            # but usually the user ran this inside an existing terminal tab.
-            # However, since `install.py` is invoked by `install-remote.ps1`,
-            # we can just write a flag file or rely on the outer PowerShell script
-            # to reload the session, OR we can try to force a reload from here.
-            # Best approach for an interactive reload within the same window:
-            import subprocess
-            subprocess.run(["powershell", "-NoProfile", "-Command", 
-                "Write-Host 'Cleaning up session...'; Remove-Item Alias:cc* -ErrorAction SilentlyContinue"], 
-                check=False)
-            print("Cleanup complete. Lingering cc-* aliases have been removed from this session.")
+            # To clean up aliases in the parent PowerShell session, we cannot use a Python
+            # subprocess because it runs in a child shell environment. 
+            # Instead, we will write a temporary flag file that the calling PowerShell
+            # script (install-remote.ps1) will detect and handle.
+            import os
+            flag_file = Path(os.environ.get("TEMP", "C:/Windows/Temp")) / "cc_proxy_uninstall_flag"
+            flag_file.touch()
+            print("Cleanup complete. The calling script will now remove the aliases.")
         except Exception as e:
             print("Restart your PowerShell terminal to clean up lingering aliases.")
 

@@ -96,6 +96,14 @@ Invoke-WebRequest -Uri $installerUrl -OutFile $tempScript -UseBasicParsing
 # Cleanup
 if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
 
+# Handle uninstall alias cleanup
+$uninstallFlag = "$env:TEMP\cc_proxy_uninstall_flag"
+if (Test-Path $uninstallFlag) {
+    Remove-Item $uninstallFlag -Force -ErrorAction SilentlyContinue
+    Get-Alias -Name cc* -ErrorAction SilentlyContinue | Remove-Item -ErrorAction SilentlyContinue
+    exit 0
+}
+
 # Auto-load into current session
 $proxyScript = "$env:USERPROFILE\.cli-proxy\shell\powershell\cc-proxy.ps1"
 if (Test-Path $proxyScript) {
