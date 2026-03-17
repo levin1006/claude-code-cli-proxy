@@ -54,6 +54,7 @@ CORE_FILES = {
     "core/tui.py": "core/tui.py",
     "core/commands.py": "core/commands.py",
     "core/updater.py": "core/updater.py",
+    "core/binary_updater.py": "core/binary_updater.py",
 }
 
 BINARY_PATHS = {
