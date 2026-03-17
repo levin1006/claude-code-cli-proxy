@@ -340,7 +340,8 @@ def setup_profile() -> None:
         print("Or restart your PowerShell terminal.")
         return
 
-    source_line = f"source {INSTALL_DIR}/shell/bash/cc-proxy.sh"
+    src_path = f"{INSTALL_DIR}/shell/bash/cc-proxy.sh"
+    source_line = f"source {src_path}"
 
     for rc_file in [".bashrc", ".zshrc"]:
         rc_path = Path.home() / rc_file
@@ -348,7 +349,7 @@ def setup_profile() -> None:
             continue
 
         content = rc_path.read_text(encoding="utf-8")
-        if source_line in content:
+        if src_path in content:
             print(f"Source line already exists in ~/{rc_file}")
             continue
 
