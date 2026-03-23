@@ -790,6 +790,7 @@ def install_claude_code(system: str, platform_key: str) -> None:
                   on platforms where standalone Bun is unsupported (Arm64 Linux).
     """
     import subprocess
+    import sys
 
     if shutil.which("claude"):
         print("Claude Code already installed -- skipping.")
@@ -803,22 +804,38 @@ def install_claude_code(system: str, platform_key: str) -> None:
                 check=False,
             )
             if result.returncode != 0:
-                print("Warning: Claude Code installation may have failed.")
+                print("\n\033[91m[CRITICAL ERROR] Claude Code installation failed.\033[0m")
                 print("Please install manually: https://claude.ai/download")
+                sys.exit(1)
             else:
                 print("Claude Code installation completed.")
         except Exception as exc:
-            print(f"Warning: failed to run Claude Code installer: {exc}")
+            print(f"\n\033[91m[CRITICAL ERROR] Failed to run Claude Code installer: {exc}\033[0m")
             print("Please install manually: https://claude.ai/download")
+            sys.exit(1)
         return
 
     # Windows or Linux Arm64 — npm install (Node.js runtime)
     npm_bin = shutil.which("npm")
     if not npm_bin:
-        print("Warning: npm not found. Cannot install Claude Code automatically.")
-        print("Please install Node.js (https://nodejs.org/) then run:")
-        print("  npm install -g @anthropic-ai/claude-code")
-        return
+        if system == "linux":
+            print("\nWarning: npm not found. Claude Code requires Node.js on this architecture.")
+            print("Attempting to install Node.js automatically via NodeSource (requires sudo)...")
+            try:
+                subprocess.run("curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -", shell=True, check=True)
+                subprocess.run(["sudo", "apt-get", "install", "-y", "nodejs"], check=True)
+                npm_bin = shutil.which("npm")
+                if not npm_bin:
+                    raise Exception("npm still not found after apt-get install")
+            except Exception as e:
+                print(f"\n\033[91m[CRITICAL ERROR] Failed to install Node.js automatically: {e}\033[0m")
+                print("Please install Node.js (https://nodejs.org/) manually and rerun the installer.")
+                sys.exit(1)
+        else:
+            print("\n\033[91m[CRITICAL ERROR] npm not found.\033[0m Cannot install Claude Code automatically.")
+            print("Please install Node.js (https://nodejs.org/) then run:")
+            print("  npm install -g @anthropic-ai/claude-code")
+            sys.exit(1)
 
     print("Claude Code not found. Installing via npm (Node.js runtime)...")
     try:
@@ -826,14 +843,25 @@ def install_claude_code(system: str, platform_key: str) -> None:
             [npm_bin, "install", "-g", "@anthropic-ai/claude-code"],
             check=False,
         )
+        if result.returncode != 0 and system == "linux":
+            print("Standard npm install failed (likely EACCES). Retrying with sudo...")
+            result = subprocess.run(
+                ["sudo", npm_bin, "install", "-g", "@anthropic-ai/claude-code"],
+                check=False,
+            )
+            
         if result.returncode != 0:
-            print("Warning: Claude Code npm installation may have failed.")
+            print("\n\033[91m[CRITICAL ERROR] Claude Code npm installation failed.\033[0m")
             print("Please install manually: npm install -g @anthropic-ai/claude-code")
+            if system == "linux":
+                print("If you get EACCES errors, try: sudo npm install -g @anthropic-ai/claude-code")
+            sys.exit(1)
         else:
             print("Claude Code installation completed (npm).")
     except Exception as exc:
-        print(f"Warning: failed to install Claude Code via npm: {exc}")
+        print(f"\n\033[91m[CRITICAL ERROR] Failed to install Claude Code via npm: {exc}\033[0m")
         print("Please install manually: npm install -g @anthropic-ai/claude-code")
+        sys.exit(1)
 
 
 def main() -> None:
