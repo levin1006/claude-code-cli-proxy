@@ -70,6 +70,16 @@ def _find_claude_bin():
         return found
 
     if not IS_WINDOWS:
+        from pathlib import Path as _Path
+        home = _Path.home()
+        for candidate in (
+            home / ".npm-global" / "bin" / "claude",
+            home / ".bun" / "bin" / "claude",
+            _Path("/usr/local/bin/claude"),
+            _Path("/opt/homebrew/bin/claude"),
+        ):
+            if candidate.is_file():
+                return str(candidate)
         return None
 
     # Slow path: read User PATH from registry and search each entry

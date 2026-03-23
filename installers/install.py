@@ -781,12 +781,13 @@ def start_proxies_after_install() -> None:
             pass
 
 
-def install_claude_code(system: str) -> None:
+def install_claude_code(system: str, platform_key: str) -> None:
     """Install Claude Code CLI if not already present.
 
-    Linux/macOS : official installer (curl ... | bash) — standalone Bun binary.
-    Windows     : npm install (Node.js runtime) — avoids Bun ConPTY crash in
-                  IDE-embedded terminals (VSCode, Antigravity, etc.).
+    Linux x86_64: official installer (curl ... | bash) — standalone Bun binary.
+    Windows & Linux Arm64: npm install (Node.js runtime) — avoids Bun ConPTY crash in
+                  IDE-embedded terminals (VSCode, Antigravity, etc.) or leverages node
+                  on platforms where standalone Bun is unsupported (Arm64 Linux).
     """
     import subprocess
 
@@ -794,7 +795,7 @@ def install_claude_code(system: str) -> None:
         print("Claude Code already installed -- skipping.")
         return
 
-    if system == "linux":
+    if system == "linux" and "arm64" not in platform_key:
         print("Claude Code not found. Installing via official installer...")
         try:
             result = subprocess.run(
@@ -811,7 +812,7 @@ def install_claude_code(system: str) -> None:
             print("Please install manually: https://claude.ai/download")
         return
 
-    # Windows — npm install (Node.js runtime, no Bun crash)
+    # Windows or Linux Arm64 — npm install (Node.js runtime)
     npm_bin = shutil.which("npm")
     if not npm_bin:
         print("Warning: npm not found. Cannot install Claude Code automatically.")
@@ -857,7 +858,7 @@ def main() -> None:
 
     print(f"Detected platform: {platform_key}")
 
-    install_claude_code(system)
+    install_claude_code(system, platform_key)
 
     stop_existing_proxies()
 
