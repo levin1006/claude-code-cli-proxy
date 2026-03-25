@@ -16,10 +16,10 @@ from commands import invoke_claude, cmd_token_delete, cmd_token_list
 
 
 class TestInvokeClaude(unittest.TestCase):
-    def test_returns_1_when_claude_not_in_path(self):
+    @patch("commands._find_claude_bin", return_value=None)
+    def test_returns_1_when_claude_not_in_path(self, mock_find):
         """Missing claude binary should print an error and return 1, not crash."""
-        with patch("commands.shutil.which", return_value=None):
-            result = invoke_claude("claude", "opus-model", "sonnet-model", "haiku-model", [])
+        result = invoke_claude("claude", "opus-model", "sonnet-model", "haiku-model", [])
         self.assertEqual(result, 1)
 
     @patch("commands.subprocess.run")

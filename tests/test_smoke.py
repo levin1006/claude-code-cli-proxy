@@ -55,7 +55,7 @@ class TestBinaryHelp(unittest.TestCase):
             capture_output=True, text=True, timeout=5,
         )
         combined = result.stdout + result.stderr
-        for flag in ["-antigravity-login", "-claude-login", "-codex-login", "-login"]:
+        for flag in ["-antigravity-login", "-claude-login", "-codex-login", "-login", "-qwen-login"]:
             # The -login flag is shared/generic, may appear as substring
             self.assertIn(
                 flag.lstrip("-"),
