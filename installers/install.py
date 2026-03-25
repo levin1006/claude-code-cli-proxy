@@ -22,6 +22,7 @@ DIRECTORIES_TO_CREATE = [
     "configs/claude",
     "configs/openai",
     "configs/gemini",
+    "installers",
 ]
 
 ARCH_ALIASES = {
@@ -55,6 +56,7 @@ CORE_FILES = {
     "core/commands.py": "core/commands.py",
     "core/updater.py": "core/updater.py",
     "core/binary_updater.py": "core/binary_updater.py",
+    "installers/install.py": "installers/install.py",
 }
 
 BINARY_PATHS = {
